@@ -1,0 +1,11 @@
+{
+  "name": "envclarity",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auditor local de variables de entorno para proyectos TypeScript, Node y React.",
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=24"
+  }
+}
