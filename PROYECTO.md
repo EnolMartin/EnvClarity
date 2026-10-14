@@ -14,9 +14,9 @@ Un desarrollador que incorpora un colaborador o prepara un despliegue de una apl
 
 ## Ejemplo de utilidad
 
-El backend utiliza `process.env.DATABASE_URL`, pero `.env.example` no la documenta y el archivo de entorno seleccionado no la contiene. El auditor informa del nombre, el archivo y la línea donde se utiliza, y explica ambas incidencias sin imprimir valores.
+El backend utiliza `process.env.DATABASE_URL`, pero `.env.example` no la documenta. El auditor emite `UNDOCUMENTED_VARIABLE` e indica el archivo y la línea donde se utiliza, sin imprimir valores.
 
-Tras documentar y configurar la variable, el mismo análisis deja de informar de esas incidencias.
+Una vez documentada, si falta en el archivo de entorno seleccionado, emite `MISSING_VARIABLE`. Tras configurarla, el mismo análisis deja de informar de ambas incidencias.
 
 ## Primera versión
 
@@ -28,7 +28,7 @@ Una CLI en TypeScript con un motor de análisis separado de la presentación del
 4. Emitir informes de texto y JSON con códigos de incidencia, nombres de variables y ubicaciones en el código.
 5. Permitir usar el resultado en integración continua mediante códigos de salida documentados.
 
-En Vite, propiedades propias del framework como `MODE`, `BASE_URL`, `DEV`, `PROD` y `SSR` no se tratarán como variables que el usuario deba definir. El analizador distinguirá el contexto de Vite del de Node.
+En Vite, propiedades propias del framework como `MODE`, `BASE_URL`, `DEV`, `PROD` y `SSR` no se tratarán como variables que el usuario deba definir. La exclusión solo se aplica a referencias de `import.meta.env`; nombres como `process.env.MODE` siguen siendo variables normales.
 
 ### Incidencias
 
@@ -70,6 +70,8 @@ La primera versión no resuelve alias, desestructuración, funciones envoltorio 
 La interfaz visual consumirá el mismo modelo de informe que utiliza la CLI, sin duplicar las reglas de análisis.
 
 ## Secuencia de desarrollo
+
+El detalle de pasos, comprobaciones y commits propuestos está en [ROADMAP.md](ROADMAP.md). Cada paso se implementará y revisará por separado.
 
 1. Motor: extraer referencias y ubicaciones de pequeños proyectos de ejemplo.
 2. Comparación: leer los archivos de entorno y producir incidencias verificables.
