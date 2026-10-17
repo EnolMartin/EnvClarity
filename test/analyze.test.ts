@@ -10,6 +10,11 @@ function viteReference(name: string, line: number, column: number, path = "src/c
   return { name, origin: "import.meta.env", location: { path, line, column } };
 }
 
+function dynamicReference(origin: "process.env" | "import.meta.env", line: number, column: number,
+  path = "src/config.ts") {
+  return { origin, location: { path, line, column } };
+}
+
 test("extracts dotted and quoted Node references with exact source locations", () => {
   const result = analyze({
     path: "src/config.ts",
@@ -170,4 +175,89 @@ test("parses TypeScript assertions in .ts rather than JSX elements", () => {
   const content = "const label = <string>import.meta.env.VITE_LABEL;\nprocess.env.PORT;";
   assert.deepEqual(analyze({ path: "src/config.ts", content }).references,
     [viteReference("VITE_LABEL", 1, 23), reference("PORT", 2, 1)]);
+});
+
+for (const extension of ["ts", "tsx", "js", "jsx"]) {
+  test(`records dynamic Node and Vite accesses in .${extension} with exact CRLF locations`, () => {
+    const path = `src/config.${extension}`;
+    const content = "\r\n  process.env[key];\r\n\timport.meta.env[key];\r\nprocess.env[key];";
+
+    assert.deepEqual(analyze({ path, content }), {
+      references: [],
+      dynamicReferences: [
+        dynamicReference("process.env", 2, 3, path),
+        dynamicReference("import.meta.env", 3, 2, path),
+        dynamicReference("process.env", 4, 1, path),
+      ],
+    });
+  });
+}
+
+test("keeps literals, Vite exclusions and nested references alongside dynamic accesses", () => {
+  const content = [
+    "process.env.PORT;",
+    "import.meta.env.MODE;",
+    "import.meta.env[key];",
+    'process.env["MODE"];',
+    'import.meta.env["VITE_API"];',
+    "process.env[import.meta.env.VITE_KEY];",
+  ].join("\n");
+
+  assert.deepEqual(analyze({ path: "src/config.ts", content }), {
+    references: [reference("PORT", 1, 1), reference("MODE", 4, 1), viteReference("VITE_API", 5, 1),
+      viteReference("VITE_KEY", 6, 13)],
+    dynamicReferences: [dynamicReference("import.meta.env", 3, 1), dynamicReference("process.env", 6, 1)],
+  });
+});
+
+test("does not resolve identifiers or evaluate computed keys and retains no source text", () => {
+  const expressions = ["key", '"SYNTHETIC_PRIVATE_MARKER" + suffix', "getKey()", "`PORT`", "`VITE_${key}`", "0"];
+  const origins = ["process.env", "import.meta.env"] as const;
+  const content = 'const key = "MODE";\n' + origins.flatMap((origin) =>
+    expressions.map((expression) => `${origin}[${expression}];`)).join("\n");
+
+  assert.deepEqual(analyze({ path: "src/config.ts", content }), {
+    references: [],
+    dynamicReferences: origins.flatMap((origin, index) => expressions.map((_, offset) =>
+      dynamicReference(origin, index * expressions.length + offset + 2, 1))),
+  });
+});
+
+test("ignores dynamic access text in comments, strings, regex and JSX while visiting expressions", () => {
+  const path = "src/View.tsx";
+  const content = [
+    "// process.env[key] import.meta.env[key]",
+    "/* process.env[key] import.meta.env[key] */",
+    '\'process.env[key] import.meta.env[key]\';',
+    '\"process.env[key] import.meta.env[key]\";',
+    "`process.env[key] import.meta.env[key]`;",
+    "/process.env[key]|import.meta.env[key]/;",
+    "const view = <section>",
+    '  process.env[key] import.meta.env[key] <span title="process.env[key] import.meta.env[key]" />',
+    "  {/* process.env[key] import.meta.env[key] */}",
+    "  {process.env[key]}",
+    "  {import.meta.env[key]}",
+    "</section>;",
+    '`text ${process.env[key]}`;',
+  ].join("\n");
+
+  assert.deepEqual(analyze({ path, content }), {
+    references: [],
+    dynamicReferences: [dynamicReference("process.env", 10, 4, path),
+      dynamicReference("import.meta.env", 11, 4, path), dynamicReference("process.env", 13, 9, path)],
+  });
+});
+
+test("does not extend direct reference coverage to aliases, destructuring or wrappers", () => {
+  const content = [
+    "const nodeEnv = process.env; nodeEnv[key];",
+    "const viteEnv = import.meta.env; viteEnv[key];",
+    "const { PORT } = process.env;",
+    "const { VITE_PORT } = import.meta.env;",
+    "readEnv(key);",
+    "other.env[key]; globalThis.process.env[key];",
+    "process.environment[key]; import.meta.environment[key];",
+  ].join("\n");
+
+  assert.deepEqual(analyze({ path: "src/config.ts", content }), { references: [], dynamicReferences: [] });
 });

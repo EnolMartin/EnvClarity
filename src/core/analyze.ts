@@ -1,5 +1,5 @@
 import ts from "typescript";
-import type { AnalysisInput, AnalysisResult, ReferenceOrigin, VariableReference } from "./types.js";
+import type { AnalysisInput, AnalysisResult, DynamicReference, ReferenceOrigin, VariableReference } from "./types.js";
 
 const viteBuiltIns = new Set(["MODE", "BASE_URL", "DEV", "PROD", "SSR"]);
 
@@ -25,10 +25,11 @@ function scriptKind(path: string): ts.ScriptKind {
   return ts.ScriptKind.TS;
 }
 
-/** Extract literal Node and Vite references without resolving or executing modules. */
+/** Extract direct Node and Vite references without resolving identifiers or executing modules. */
 export function analyze(input: AnalysisInput): AnalysisResult {
   const source = ts.createSourceFile(input.path, input.content, ts.ScriptTarget.Latest, false, scriptKind(input.path));
   const references: VariableReference[] = [];
+  const dynamicReferences: DynamicReference[] = [];
   const pending: ts.Node[] = [source];
 
   while (pending.length > 0) {
@@ -40,20 +41,22 @@ export function analyze(input: AnalysisInput): AnalysisResult {
       && ts.isIdentifier(node.name)) {
       name = node.name.text;
       origin = environmentOrigin(node.expression);
-    } else if (ts.isElementAccessExpression(node)
-      && ts.isStringLiteral(node.argumentExpression)) {
-      name = node.argumentExpression.text;
+    } else if (ts.isElementAccessExpression(node)) {
       origin = environmentOrigin(node.expression);
+      if (ts.isStringLiteral(node.argumentExpression)) {
+        name = node.argumentExpression.text;
+      }
     }
 
-    if (name !== undefined && origin !== undefined
-      && !(origin === "import.meta.env" && viteBuiltIns.has(name))) {
+    if (origin !== undefined
+      && !(origin === "import.meta.env" && name !== undefined && viteBuiltIns.has(name))) {
       const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-      references.push({
-        name,
-        origin,
-        location: { path: input.path, line: position.line + 1, column: position.character + 1 },
-      });
+      const location = { path: input.path, line: position.line + 1, column: position.character + 1 };
+      if (name === undefined) {
+        dynamicReferences.push({ origin, location });
+      } else {
+        references.push({ name, origin, location });
+      }
     }
 
     const children: ts.Node[] = [];
@@ -63,6 +66,5 @@ export function analyze(input: AnalysisInput): AnalysisResult {
     }
   }
 
-  // Unresolved computed accesses belong to a later step.
-  return { references, dynamicReferences: [] };
+  return { references, dynamicReferences };
 }

@@ -46,7 +46,9 @@ El informe describirá el estado de los archivos seleccionados. No afirmará con
 
 ### Límites del análisis
 
-La primera versión no resuelve alias, desestructuración, funciones envoltorio ni todas las referencias dinámicas. Estas limitaciones se documentarán. Tampoco pretende detectar filtraciones de secretos ni demostrar que una variable del servidor llega al navegador.
+El MVP analiza referencias sintácticas directas a `process.env` e `import.meta.env`. Reconoce nombres mediante punto o cadenas literales entre corchetes. Los demás accesos calculados, como `process.env[key]` e `import.meta.env[key]`, se registran en `dynamicReferences` solo con origen y ubicación, sin inferir nombres ni conservar contenido fuente. Este registro permitirá generar `DYNAMIC_REFERENCE` en la fase de construcción de incidencias.
+
+No resuelve alias, desestructuración, funciones envoltorio ni identificadores: incluso si `key` se declara con una cadena constante, el acceso sigue siendo dinámico. Tampoco evalúa expresiones calculadas ni distingue símbolos locales llamados `process`. La cobertura se limita a referencias directas; no pretende detectar filtraciones de secretos ni demostrar que una variable del servidor llega al navegador.
 
 ## Protección de datos y archivos
 
