@@ -73,8 +73,6 @@ La interfaz visual consumirá el mismo modelo de informe que utiliza la CLI, sin
 
 ## Secuencia de desarrollo
 
-El detalle de pasos, comprobaciones y commits propuestos está en [ROADMAP.md](ROADMAP.md). Cada paso se implementará y revisará por separado.
-
 1. Motor: extraer referencias y ubicaciones de pequeños proyectos de ejemplo.
 2. Comparación: leer los archivos de entorno y producir incidencias verificables.
 3. CLI: seleccionar el proyecto y el entorno, mostrar texto y exportar JSON.
