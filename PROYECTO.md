@@ -50,6 +50,30 @@ El MVP analiza referencias sintácticas directas a `process.env` e `import.meta.
 
 No resuelve alias, desestructuración, funciones envoltorio ni identificadores: incluso si `key` se declara con una cadena constante, el acceso sigue siendo dinámico. Tampoco evalúa expresiones calculadas ni distingue símbolos locales llamados `process`. La cobertura se limita a referencias directas; no pretende detectar filtraciones de secretos ni demostrar que una variable del servidor llega al navegador.
 
+### Lectura de archivos de entorno
+
+La capa de lectura `readEnv(files, environmentPath, examplePath)` recibe la sesión `ProjectFiles` del análisis y lee secuencialmente dos archivos acotados: `.env.example` por defecto (o la ruta explícita alternativa) y el archivo elegido, cuya ruta es obligatoria. Devuelve nombres documentados únicos y entradas `{ name, state }` ordenadas por nombre. Solo produce `present` y `empty`; un nombre ausente no genera una entrada. Todavía no realiza comparación ni se conecta con la CLI.
+
+Se utiliza un lector propio que clasifica directamente por posiciones en el contenido acotado, sin construir cadenas de valores ni un objeto de valores parseados. Un `Map` conserva únicamente nombres y estados, incluidos nombres especiales como `__proto__`, sin asignar propiedades por nombre ni modificar prototipos. No se añaden dependencias. El contenido original permanece transitoriamente en memoria; no se garantiza su borrado físico. No se fusionan otros archivos ni `process.env`, no se modifica el entorno del proceso, no se expanden `$NAME`/`${NAME}` ni se ejecutan comandos o JavaScript.
+
+Contrato de sintaxis, común a todas las versiones soportadas:
+
+- Admite asignaciones con `=`, comentarios con `#` y finales LF/CRLF. Las líneas vacías se ignoran. Sin comillas, el contenido termina al final de esa línea o en `#`; los espacios no cuentan como contenido. `A=   ` seguido de `B=synthetic` produce `A: empty` y conserva `B: present`.
+- Recorta espacios alrededor del nombre. Conserva la admisión previa de nombres con dígitos iniciales, guiones, puntos, espacios y caracteres no ASCII; no valida identificadores. Omite nombres vacíos o que contengan `#`. `constructor`, `toString`, `hasOwnProperty` y `__proto__` son nombres ordinarios.
+- El prefijo literal `export`, seguido de espacios o tabuladores, se elimina tanto en asignaciones vacías como no vacías: `export A=` produce el nombre `A` y estado `empty`.
+- Admite comillas simples, dobles y acentos graves al principio del contenido, también multilínea. Cierra en la primera comilla del mismo tipo; `#`, espacios y saltos de línea dentro de las comillas cuentan como contenido. Las tres formas de comillas vacías producen `empty`; las que contienen espacios o saltos de línea producen `present`. Las barras inversas no escapan delimitadores y no se interpretan secuencias de escape: cualquier secuencia como `\n` es contenido no vacío. No se necesita decodificarla para distinguir los estados.
+- En duplicados, **gana la última aparición**, también si reemplaza contenido por vacío. `.env.example` se deduplica con la misma regla.
+
+Se mantiene el tratamiento permisivo anterior de entradas no admitidas: las líneas sin `=` y las asignaciones con `:` se ignoran; sin cierre de comilla en todo el contenido restante, se clasifica como texto de una sola línea. Una comilla posterior sí puede cerrar un contenido multilínea y absorber declaraciones intermedias; el texto posterior al cierre en esa línea se descarta. No se promete validación estricta ni se añaden todavía diagnósticos de formato.
+
+Se evaluó [`util.parseEnv`](https://nodejs.org/download/release/v24.17.0/docs/api/util.html#utilparseenvcontent) y se descartó para este contrato: tanto Node 24.17.0 como 26.0.0 consumen incorrectamente la siguiente asignación después de espacios tras `=` y conservan `export` en el nombre de una asignación vacía. Además, 24.17.0 omite `__proto__` y 26.0.0 lo conserva. Las pruebas exigen los resultados correctos del lector propio, sin expectativas condicionadas por la versión.
+
+### Versiones de Node soportadas
+
+`package.json` declara **`^24.17.0 || ^26.0.0`**: Node 24 desde 24.17.0 hasta antes de 25, y Node 26 desde 26.0.0 hasta antes de 27. Node 25 y otras versiones mayores no se declaran soportadas. `.nvmrc` fija 24.17.0 como base reproducible de desarrollo. La comprobación local del mismo contrato funcional y la suite completa utiliza **24.17.0 y 26.0.0**; no equivale a probar cada versión intermedia.
+
+Para repetir la comprobación, colocar primero en `PATH` el directorio de cada versión de Node y ejecutar `node --version`, `pnpm exec node --version`, `pnpm typecheck` y `pnpm test`; después, `git diff --check`. Ambas ejecuciones usan los mismos archivos de prueba, incluidos los tres casos de regresión, sin cambiar expectativas por versión. Mantener pnpm en la versión fijada en `package.json`.
+
 ## Protección de datos y archivos
 
 - No transmitir información a servicios externos ni añadir telemetría.
@@ -63,7 +87,7 @@ No resuelve alias, desestructuración, funciones envoltorio ni identificadores: 
 ## Tecnologías y arquitectura
 
 - TypeScript y Node para el motor y la CLI.
-- pnpm para gestionar dependencias; versión inicial fijada en `package.json`. Node 24 para el entorno de desarrollo.
+- pnpm para gestionar dependencias; versión fijada en `package.json`. Node 24.17.0 como base de desarrollo y soporte adicional para Node 26 según el rango y las comprobaciones anteriores.
 - Analizador sintáctico de TypeScript como candidato para reconocer referencias con precisión. Su incorporación como dependencia de producción requiere aprobación antes de implementar.
 - Separación mínima: lectura de archivos, extracción de referencias, comparación e informes.
 - React con Vite para un informe visual local en una segunda fase.

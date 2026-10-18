@@ -1,0 +1,60 @@
+import type { ComparisonInput, EnvironmentVariable } from "../core/types.js";
+import type { ProjectFiles } from "./discover.js";
+
+/** Classify bounded dotenv input without extracting or retaining parsed values. */
+function readStates(content: string): EnvironmentVariable[] {
+  const states = new Map<string, "present" | "empty">();
+  let position = 0;
+  while (position < content.length) {
+    const newline = content.indexOf("\n", position);
+    const lineEnd = newline === -1 ? content.length : newline;
+    const lineStart = position;
+    position = lineEnd + 1;
+
+    let equals = lineStart;
+    while (equals < lineEnd && content[equals] !== "=") equals++;
+    if (equals === lineEnd) continue;
+    const name = content.slice(lineStart, equals).trim().replace(/^export[ \t]+/, "").trim();
+    if (!name || name.includes("#")) continue;
+
+    let start = equals + 1;
+    // Horizontal whitespace must never consume the following declaration.
+    while (start < lineEnd && /\s/.test(content[start]!)) start++;
+    const quote = content[start];
+    if (start < lineEnd && (quote === '"' || quote === "'" || quote === "`")) {
+      const end = content.indexOf(quote, start + 1);
+      if (end !== -1) {
+        states.set(name, end === start + 1 ? "empty" : "present");
+        const nextLine = content.indexOf("\n", end + 1);
+        position = nextLine === -1 ? content.length : nextLine + 1;
+        continue;
+      }
+    }
+
+    let state: "present" | "empty" = "empty";
+    for (let index = start; index < lineEnd && content[index] !== "#"; index++) {
+      if (/\S/.test(content[index]!)) {
+        state = "present";
+        break;
+      }
+    }
+    states.set(name, state);
+  }
+  return Array.from(states, ([name, state]) => ({ name, state }))
+    .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+}
+
+/**
+ * Read only the two selected files, sequentially on the caller's analysis session.
+ * The supported dotenv syntax is documented in PROYECTO.md and independent of Node's parser.
+ * Raw contents never leave this I/O boundary; only names and states are retained.
+ */
+export async function readEnv(
+  files: ProjectFiles,
+  environmentPath: string,
+  examplePath = ".env.example",
+): Promise<Pick<ComparisonInput, "documentedNames" | "environment">> {
+  const documentedNames = readStates(await files.readEnvironment(examplePath)).map(({ name }) => name);
+  const environment = readStates(await files.readEnvironment(environmentPath));
+  return { documentedNames, environment };
+}
