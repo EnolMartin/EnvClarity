@@ -17,14 +17,15 @@ const excludedDirectories = new Set([
   "node_modules", ".git", "dist", "build", "coverage", ".next", ".turbo", ".cache",
 ]);
 
-type ScanFailureCode = Extract<AuditFailureCode, "INVALID_INPUT" | "READ_ERROR" | "LIMIT_EXCEEDED">;
+type ScanFailureCode = AuditFailureCode;
 const failureMessages: Record<ScanFailureCode, string> = {
   INVALID_INPUT: "Invalid project root or selected path.",
   READ_ERROR: "Project file access could not be completed safely.",
+  FORMAT_ERROR: "Environment file format is not supported.",
   LIMIT_EXCEEDED: "Project scanning limit exceeded.",
 };
 
-/** Safe operational failure: no paths, contents or original filesystem errors. */
+/** Safe operational failure: no paths, contents or original filesystem/parser errors. */
 export class ScanError extends Error {
   readonly code: ScanFailureCode;
 
@@ -173,9 +174,14 @@ export class ProjectFiles {
     });
   }
 
-  /** I/O only. The environment parser must reduce this content before it reaches core/reporters. */
-  async readEnvironment(path: string): Promise<string> {
-    return this.run(() => this.read(path, SCAN_LIMITS.environmentBytes, false));
+  /** Parse inside the protected operation so format failures also invalidate the session. */
+  async readEnvironment(path: string): Promise<string>;
+  async readEnvironment<T>(path: string, parse: (content: string) => T): Promise<T>;
+  async readEnvironment<T>(path: string, parse?: (content: string) => T): Promise<string | T> {
+    return this.run(async () => {
+      const content = await this.read(path, SCAN_LIMITS.environmentBytes, false);
+      return parse ? parse(content) : content;
+    });
   }
 
   private async read(path: string, limit: number, source: boolean): Promise<string> {
