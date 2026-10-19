@@ -1,5 +1,11 @@
 import ts from "typescript";
-import type { AnalysisInput, AnalysisResult, DynamicReference, ReferenceOrigin, VariableReference } from "./types.js";
+import type {
+  AnalysisInput,
+  AnalysisResult,
+  DynamicReference,
+  ReferenceOrigin,
+  VariableReference,
+} from "./types.js";
 
 const viteBuiltIns = new Set(["MODE", "BASE_URL", "DEV", "PROD", "SSR"]);
 
@@ -10,9 +16,11 @@ function environmentOrigin(node: ts.Expression): ReferenceOrigin | undefined {
   if (ts.isIdentifier(node.expression) && node.expression.text === "process") {
     return "process.env";
   }
-  if (ts.isMetaProperty(node.expression)
-    && node.expression.keywordToken === ts.SyntaxKind.ImportKeyword
-    && node.expression.name.text === "meta") {
+  if (
+    ts.isMetaProperty(node.expression) &&
+    node.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    node.expression.name.text === "meta"
+  ) {
     return "import.meta.env";
   }
   return undefined;
@@ -27,7 +35,13 @@ function scriptKind(path: string): ts.ScriptKind {
 
 /** Extract direct Node and Vite references without resolving identifiers or executing modules. */
 export function analyze(input: AnalysisInput): AnalysisResult {
-  const source = ts.createSourceFile(input.path, input.content, ts.ScriptTarget.Latest, false, scriptKind(input.path));
+  const source = ts.createSourceFile(
+    input.path,
+    input.content,
+    ts.ScriptTarget.Latest,
+    false,
+    scriptKind(input.path),
+  );
   const references: VariableReference[] = [];
   const dynamicReferences: DynamicReference[] = [];
   const pending: ts.Node[] = [source];
@@ -37,8 +51,7 @@ export function analyze(input: AnalysisInput): AnalysisResult {
     let name: string | undefined;
     let origin: ReferenceOrigin | undefined;
 
-    if (ts.isPropertyAccessExpression(node)
-      && ts.isIdentifier(node.name)) {
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.name)) {
       name = node.name.text;
       origin = environmentOrigin(node.expression);
     } else if (ts.isElementAccessExpression(node)) {
@@ -48,10 +61,22 @@ export function analyze(input: AnalysisInput): AnalysisResult {
       }
     }
 
-    if (origin !== undefined
-      && !(origin === "import.meta.env" && name !== undefined && viteBuiltIns.has(name))) {
-      const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-      const location = { path: input.path, line: position.line + 1, column: position.character + 1 };
+    if (
+      origin !== undefined &&
+      !(
+        origin === "import.meta.env" &&
+        name !== undefined &&
+        viteBuiltIns.has(name)
+      )
+    ) {
+      const position = source.getLineAndCharacterOfPosition(
+        node.getStart(source),
+      );
+      const location = {
+        path: input.path,
+        line: position.line + 1,
+        column: position.character + 1,
+      };
       if (name === undefined) {
         dynamicReferences.push({ origin, location });
       } else {
@@ -60,7 +85,9 @@ export function analyze(input: AnalysisInput): AnalysisResult {
     }
 
     const children: ts.Node[] = [];
-    ts.forEachChild(node, (child) => { children.push(child); });
+    ts.forEachChild(node, (child) => {
+      children.push(child);
+    });
     for (const child of children.reverse()) {
       pending.push(child);
     }

@@ -24,9 +24,15 @@ export function compare(input: ComparisonInput): AuditIssue[] {
 
   for (const name of documentedNames) {
     const state = environment.get(name);
+    const references = referencesByName.get(name) ?? [];
     if (state === undefined || state === "absent") {
-      issues.push({ code: "MISSING_VARIABLE", severity: "error", name,
-        references: referencesByName.get(name) ?? [] });
+      issues.push({ code: "MISSING_VARIABLE", severity: "error", name, references });
+    } else if (state === "empty") {
+      issues.push({ code: "EMPTY_VARIABLE", severity: "warning", name, references });
+    }
+    // Other patterns, including dynamic accesses, may still use this name.
+    if (references.length === 0) {
+      issues.push({ code: "POSSIBLY_UNUSED_VARIABLE", severity: "warning", name, references });
     }
   }
 
