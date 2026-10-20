@@ -72,6 +72,43 @@ Los fallos operativos reutilizan `ScanError` y los códigos de `AuditFailureCode
 
 Se evaluó [`util.parseEnv`](https://nodejs.org/download/release/v24.17.0/docs/api/util.html#utilparseenvcontent) y se descartó para este contrato: tanto Node 24.17.0 como 26.0.0 consumen incorrectamente la siguiente asignación después de espacios tras `=` y conservan `export` en el nombre de una asignación vacía. Además, 24.17.0 omite `__proto__` y 26.0.0 lo conserva. Las pruebas exigen los resultados correctos del lector propio, sin expectativas condicionadas por la versión.
 
+### Formato JSON de resultados
+
+El módulo puro `formatJson(result: AuditResult): string`, en `src/reporters/json.ts`, devuelve un único objeto JSON compacto, sin texto decorativo ni salto de línea final. No imprime ni lee archivos. Consume el contrato tipado existente; no valida JSON externo. Todavía no está conectado a la CLI ni decide códigos de salida.
+
+Un análisis completado se representa como `{ "status": "completed", "report": AuditReport }`. Conserva `report.schemaVersion: 1`, sin introducir otra versión ni duplicar el contrato. `completed` significa que el análisis terminó, incluso cuando hay incidencias de severidad `error`; la cobertura limitada tampoco es un fallo operativo.
+
+Campos permitidos, proyectados explícitamente en cada nivel:
+
+| Objeto | Campos |
+| --- | --- |
+| Resultado completado | `status`, `report` |
+| Informe | `schemaVersion`, `summary`, `issues`, `references`, `coverage` |
+| Resumen | `errorCount`, `warningCount` |
+| Incidencia de variable | `code`, `severity`, `name`, `references` |
+| Incidencia `DYNAMIC_REFERENCE` | `code`, `severity`, `reference` (sin nombre inferido) |
+| Referencia de variable | `name`, `origin`, `location` |
+| Referencia dinámica | `origin`, `location` |
+| Ubicación | `path` relativa al proyecto, `line` y `column` basadas en 1 |
+| Cobertura | `scope: "direct-references"`, `limitations` (códigos del contrato) |
+| Resultado fallido | `status: "failed"`, `code` |
+
+Las incidencias conservan los cinco códigos y severidades del contrato. `origin` es `process.env` o `import.meta.env`. No se recalculan reglas, recuentos, orden ni duplicados de los arrays de incidencias, referencias, referencias de cada incidencia o limitaciones. Los nombres y rutas se conservan como datos, con los escapes de JSON necesarios para recuperar los caracteres originales mediante `JSON.parse`. El orden de propiedades de salida es fijo, independiente de su inserción en la entrada; entradas con los mismos campos y arrays en el mismo orden producen cadenas idénticas. No se modifican las entradas.
+
+Ejemplo de análisis completado sin incidencias ni referencias:
+
+```json
+{"status":"completed","report":{"schemaVersion":1,"summary":{"errorCount":0,"warningCount":0},"issues":[],"references":[],"coverage":{"scope":"direct-references","limitations":["ALIASES_NOT_RESOLVED","DESTRUCTURING_NOT_RESOLVED","WRAPPERS_NOT_RESOLVED","DYNAMIC_REFERENCES_NOT_RESOLVED"]}}}
+```
+
+Un fallo operativo contiene **únicamente** `status` y el código seguro `INVALID_INPUT`, `READ_ERROR`, `FORMAT_ERROR` o `LIMIT_EXCEEDED`. No contiene `report`, versión de informe, resumen ni resultados parciales, aunque existieran datos previos al fallo:
+
+```json
+{"status":"failed","code":"READ_ERROR"}
+```
+
+Se omiten propiedades adicionales de objetos y arrays en todos los niveles, incluidos valores, contenidos fuente, errores originales, mensajes, causas, timestamps y métodos `toJSON` adicionales. Solo se serializan los campos permitidos del contrato; los nombres y rutas admitidos siguen siendo visibles. Esta proyección no certifica la seguridad de datos arbitrarios introducidos en esos campos por un consumidor externo.
+
 ### Versiones de Node soportadas
 
 `package.json` declara **`^24.17.0 || ^26.0.0`**: Node 24 desde 24.17.0 hasta antes de 25, y Node 26 desde 26.0.0 hasta antes de 27. Node 25 y otras versiones mayores no se declaran soportadas. `.nvmrc` fija 24.17.0 como base reproducible de desarrollo. La comprobación local del mismo contrato funcional y la suite completa utiliza **24.17.0 y 26.0.0**; no equivale a probar cada versión intermedia.
