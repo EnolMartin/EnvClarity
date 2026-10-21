@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { audit } from "./audit.ts";
 import { parseCliArguments } from "./cli-args.ts";
 import { formatJson } from "./reporters/json.ts";
@@ -8,8 +9,8 @@ const help = `EnvClarity
 Local environment variable auditor for TypeScript, Node and Vite projects.
 Audits direct references without executing or modifying the project or printing values.
 
-Usage: node dist/cli.js [--help | -h]
-       node dist/cli.js check <root> --env <file> [--example <file>] [--format text|json]
+Usage: envclarity [--help | -h]
+       envclarity check <root> --env <file> [--example <file>] [--format text|json]
 
 Options:
   --env <file>      Required environment file; no implicit environment is loaded.

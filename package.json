@@ -4,10 +4,27 @@
   "private": true,
   "description": "Auditor local de variables de entorno para proyectos TypeScript, Node y React.",
   "type": "module",
+  "bin": {
+    "envclarity": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/cli-args.js",
+    "dist/audit.js",
+    "dist/core/analyze.js",
+    "dist/core/compare.js",
+    "dist/core/report.js",
+    "dist/io/discover.js",
+    "dist/io/read-env.js",
+    "dist/reporters/text.js",
+    "dist/reporters/json.js"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "test": "pnpm build && node --test test/*.test.ts"
+    "test": "pnpm build && node --test test/*.test.ts",
+    "test:package": "node --test test/packaging/*.test.ts"
   },
   "packageManager": "pnpm@11.8.0",
   "engines": {
