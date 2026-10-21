@@ -18,7 +18,19 @@ Options:
   -h, --help        Show this help message (used alone).
 
 Selected files must be inside <root>; relative file paths are resolved from <root>.
-JSON audits write only the result to stdout, including safe operational failures.
+
+Exit codes:
+  0  Audit completed without error-severity issues (warnings are allowed), or help.
+  1  Audit completed with at least one error-severity issue; the full report is printed.
+  2  Invalid arguments or an operational failure (input, reading, format or limits).
+
+Output channels:
+  Help: stdout; stderr is empty.
+  Invalid syntax: stdout is empty; stderr contains a fixed usage diagnostic.
+  Audits in text or JSON: stdout contains the result; stderr is empty.
+  Operational failures use the selected format, with a safe code and no partial report.
+  JSON audits write one JSON object and a newline, including operational failures.
+Diagnostics never echo arguments, environment values or original errors.
 `;
 
 const args = parseCliArguments(process.argv.slice(2));
@@ -31,6 +43,5 @@ if (args.command === "help") {
 } else {
   const result = await audit(args.root, args.environment, args.example);
   process.stdout.write(args.format === "json" ? `${formatJson(result)}\n` : formatText(result));
-  // Provisional until the separate exit-code review: all completed audits return 0.
-  process.exitCode = result.status === "failed" ? 2 : 0;
+  process.exitCode = result.status === "failed" ? 2 : result.report.summary.errorCount > 0 ? 1 : 0;
 }

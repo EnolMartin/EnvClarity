@@ -58,6 +58,12 @@ for (const args of [[], ["--help"], ["-h"]]) {
     assert.match(result.stdout, /--format text\|json/);
     assert.match(result.stdout, /default: \.env\.example/);
     assert.match(result.stdout, /default: text/);
+    assert.match(result.stdout, /0  Audit completed without error-severity issues/);
+    assert.match(result.stdout, /1  Audit completed with at least one error-severity issue/);
+    assert.match(result.stdout, /2  Invalid arguments or an operational failure/);
+    assert.match(result.stdout, /Help: stdout; stderr is empty/);
+    assert.match(result.stdout, /Invalid syntax: stdout is empty; stderr contains a fixed usage diagnostic/);
+    assert.match(result.stdout, /Audits in text or JSON: stdout contains the result; stderr is empty/);
     assert.doesNotMatch(result.stdout, /not implemented/);
   });
 }
@@ -98,6 +104,61 @@ for (const [index, args] of invalidArgs.entries()) {
   });
 }
 
+for (const format of ["text", "json"]) {
+  test(`invalid syntax keeps stdout empty even with --format=${format}`, () => {
+    const result = runCli(["check", canary, "--env", canary, `--format=${format}`, `--unknown=${canary}`]);
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, argumentError);
+  });
+}
+
+const completedCases = [
+  {
+    name: "clean report", example: "CONFIGURED=", environment: `CONFIGURED=${canary}`,
+    source: "process.env.CONFIGURED;", errors: 0, warnings: 0, exitCode: 0, codes: [],
+  },
+  {
+    name: "warnings only", example: "EMPTY=\nUNUSED=", environment: `EMPTY=\nUNUSED=${canary}`,
+    source: "process.env.EMPTY; process.env.UNDOCUMENTED; process.env[key];",
+    errors: 0, warnings: 4, exitCode: 0,
+    codes: ["DYNAMIC_REFERENCE", "EMPTY_VARIABLE", "POSSIBLY_UNUSED_VARIABLE", "UNDOCUMENTED_VARIABLE"],
+  },
+  {
+    name: "errors only", example: "MISSING=", environment: "",
+    source: "process.env.MISSING;", errors: 1, warnings: 0, exitCode: 1, codes: ["MISSING_VARIABLE"],
+  },
+  {
+    name: "errors and warnings", example: "MISSING=\nEMPTY=\nUNUSED=",
+    environment: `EMPTY=\nUNUSED=${canary}`,
+    source: "process.env.MISSING; process.env.EMPTY; process.env.UNDOCUMENTED; process.env[key];",
+    errors: 1, warnings: 4, exitCode: 1,
+    codes: ["DYNAMIC_REFERENCE", "EMPTY_VARIABLE", "MISSING_VARIABLE", "POSSIBLY_UNUSED_VARIABLE", "UNDOCUMENTED_VARIABLE"],
+  },
+];
+
+for (const selected of completedCases) {
+  for (const format of ["text", "json"]) {
+    test(`returns ${selected.exitCode} with the full ${format} result for ${selected.name}`, async (t) => {
+      const root = await project(t, {
+        ".env.example": selected.example, "chosen env": selected.environment,
+        "src/app with spaces.ts": selected.source,
+      });
+      const expected = await audit(root, "chosen env");
+      assert.equal(expected.status, "completed");
+      if (expected.status !== "completed") assert.fail("Expected a completed audit");
+      assert.deepEqual(expected.report.summary, { errorCount: selected.errors, warningCount: selected.warnings });
+      assert.deepEqual(expected.report.issues.map(issue => issue.code).sort(), selected.codes);
+
+      const result = runCli(["check", root, "--env", "chosen env", "--format", format], root);
+      assert.equal(result.status, selected.exitCode);
+      assert.equal(result.stderr, "");
+      assert.equal(result.stdout, format === "json" ? `${formatJson(expected)}\n` : formatText(expected));
+      if (format === "json") assert.deepEqual(JSON.parse(result.stdout), expected);
+    });
+  }
+}
+
 test("uses default example and text, or explicit text/JSON, with spaced paths", async (t) => {
   const root = await project(t);
   const expected = await audit(root, "chosen env");
@@ -105,8 +166,7 @@ test("uses default example and text, or explicit text/JSON, with spaced paths", 
   for (const format of [undefined, "text", "json"]) {
     const result = runCli(["check", root, "--env", "chosen env",
       ...(format ? ["--format", format] : [])], root);
-    // Step 17 does not yet distinguish report severities by exit status.
-    assert.equal(result.status, 0);
+    assert.equal(result.status, 1);
     assert.equal(result.stderr, "");
     assert.equal(result.stdout, format === "json" ? `${formatJson(expected)}\n` : formatText(expected));
     if (format === "json") assert.deepEqual(JSON.parse(result.stdout), expected);
@@ -137,7 +197,7 @@ test("accepts a relative root and a dash-prefixed root after the option terminat
       await put(root, "-project/chosen env", "");
     }
     const result = runCli(["check", "--env", "chosen env", "--format=json", "--", selected], root);
-    assert.equal(result.status, 0);
+    assert.equal(result.status, selected === "." ? 1 : 0);
     assert.equal(result.stderr, "");
     assert.equal(JSON.parse(result.stdout).status, "completed");
   }
@@ -165,14 +225,17 @@ test("preserves safe operational failures and existing path and size validation"
     { root, env: "invalid env", code: "FORMAT_ERROR" },
     { root, env: "large env", code: "LIMIT_EXCEEDED" },
   ] as const;
-  for (const selected of cases) {
+  for (const [index, selected] of cases.entries()) {
     const expected = { status: "failed", code: selected.code } as const;
     for (const format of ["text", "json"]) {
-      const result = runCli(["check", selected.root, "--env", selected.env, "--format", format], root);
-      assert.equal(result.status, 2);
-      assert.equal(result.stderr, "");
-      if (format === "json") assert.deepEqual(JSON.parse(result.stdout), expected);
-      else assert.equal(result.stdout, formatText(expected));
+      await t.test(`${selected.code} in ${format} (case ${index + 1})`, () => {
+        const result = runCli(["check", selected.root, "--env", selected.env, "--format", format], root);
+        assert.equal(result.status, 2);
+        assert.equal(result.stderr, "");
+        assert.equal(result.stdout, format === "json" ? `${formatJson(expected)}\n` : formatText(expected));
+        if (format === "json") assert.deepEqual(JSON.parse(result.stdout), expected);
+        assert.doesNotMatch(result.stdout, /Audit completed|No issues detected|"report"|"summary"/);
+      });
     }
   }
 });
@@ -201,7 +264,7 @@ test("neither executes nor modifies the audited project and never outputs canary
   for (const format of ["text", "json"]) {
     const args = ["check", root, "--env", "chosen env", "--format", format];
     const guarded = runCli(args, root);
-    assert.equal(guarded.status, 0);
+    assert.equal(guarded.status, 1);
     assert.equal(guarded.stderr, "");
     // Also observe the real executable without the permission guard masking a write attempt.
     const plain = spawnSync(process.execPath, [cliPath, ...args], {
@@ -209,7 +272,7 @@ test("neither executes nor modifies the audited project and never outputs canary
     });
     assert.ifError(plain.error);
     assert.equal(plain.signal, null);
-    assert.equal(plain.status, 0);
+    assert.equal(plain.status, 1);
     assert.equal(plain.stderr, "");
     assert.equal(plain.stdout, guarded.stdout);
     assert.deepEqual(await snapshot(root), before);

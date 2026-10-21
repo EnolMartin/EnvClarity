@@ -1,6 +1,6 @@
 # EnvClarity — definición inicial
 
-Nombre: EnvClarity. Estado: motor y reporters conectados a la CLI; códigos de salida pendientes de cierre.
+Nombre: EnvClarity. Estado: motor y reporters conectados a la CLI; códigos de salida y canales definidos.
 
 ## Objetivo
 
@@ -86,13 +86,21 @@ node dist/cli.js --help
 
 El parser separado `parseCliArguments` usa `util.parseArgs` estricto y rechaza comandos desconocidos, posicionales sobrantes o vacíos, opciones desconocidas, duplicadas (aunque repitan valor), incompletas o vacías y formatos distintos de `text`/`json`. Admite `--option=value`, opciones después de `check` en cualquier orden y `--` para terminar opciones. La ayuda se muestra sin argumentos o con `--help`/`-h` usados solos; no permite combinarlos con una auditoría. Los errores de argumentos son constantes y nunca reproducen entradas ni errores nativos.
 
-La CLI llama a `audit` y entrega su resultado a `formatText` o `formatJson`, sin duplicar reglas ni construir otro informe. Para una invocación válida en JSON, stdout contiene únicamente un objeto JSON y un salto de línea, tanto en análisis completados como en fallos operativos; stderr queda vacío. En texto, el resultado también va a stdout. Una sintaxis inválida no selecciona formato: stdout queda vacío y stderr contiene `Invalid arguments. Use --help for usage.` seguido de un salto de línea, incluso si había un argumento `--format=json`. No se imprime ayuda ni progreso junto al resultado.
+La CLI llama a `audit` y entrega su `AuditResult` completo a `formatText` o `formatJson`, sin duplicar reglas ni construir otro informe. Decide el código de salida a partir del estado del resultado y de `report.summary.errorCount`, sin volver a comparar variables ni contar incidencias.
 
-**Comportamiento provisional del paso 17:** cualquier análisis completado devuelve `0`, también si el informe contiene incidencias de severidad error; los argumentos inválidos y fallos operativos devuelven `2`. Todavía no se emite `1` por errores de configuración. El cierre y la revisión exhaustiva de códigos de salida y canales corresponden al paso 18; hasta entonces, un consumidor debe consultar el informe para distinguir sus severidades.
+| Situación | Código de salida | stdout | stderr |
+| --- | --- | --- | --- |
+| Ayuda (sin argumentos, `--help` o `-h`) | `0` | Ayuda y contrato de salidas. | Vacío. |
+| Análisis completado sin incidencias de severidad error, aunque haya advertencias | `0` | Informe completo en el formato seleccionado. | Vacío. |
+| Análisis completado con al menos una incidencia de severidad error | `1` | Informe completo en el formato seleccionado, con errores, advertencias, referencias y cobertura. | Vacío. |
+| Sintaxis inválida | `2` | Vacío. | `Invalid arguments. Use --help for usage.` y un salto de línea. |
+| Fallo operativo de rutas, lectura, formato o límites | `2` | Resultado fallido en el formato seleccionado, sin informe parcial. | Vacío. |
 
-Las pruebas del ejecutable compilado comprueban ambos formatos, valores predeterminados, ejemplo alternativo, rutas con espacios, sintaxis inválida y fallos seguros de lectura, formato, rutas y tamaño. Usan proyectos temporales con valores inventados; comparan salidas con los reporters existentes, parsean JSON y verifican ausencia de valores señuelo. Una instantánea recursiva de contenido y metadatos, antes y después de ejecutar ambos formatos con y sin permisos de solo lectura de Node, comprueba que no se ejecutan scripts, módulos, configuración ni comandos del entorno y no se modifica el proyecto. No constituye una instantánea atómica frente a cambios externos ni una revisión exhaustiva de CI.
+Una auditoría JSON con sintaxis válida escribe únicamente un objeto JSON y un salto de línea en stdout, también con códigos `1` y `2`. En JSON, los fallos operativos contienen solo `status: "failed"` y `code`: `INVALID_INPUT`, `READ_ERROR`, `FORMAT_ERROR` o `LIMIT_EXCEEDED`; no se presentan como un análisis correcto sin incidencias. En texto se muestra el código seguro, una orientación constante y la indicación de que no hay informe completado. Los fallos no reproducen argumentos sensibles, rutas seleccionadas, valores ni errores originales. Una sintaxis inválida no selecciona formato: usa el diagnóstico constante de stderr incluso si incluía `--format=json`. No se imprime ayuda ni progreso junto al resultado. La cobertura limitada y las advertencias, incluidas referencias dinámicas, no convierten por sí mismas un análisis completado en código `1` o `2`.
 
-Verificación del paso 17: `pnpm typecheck` y `pnpm test` pasan con Node **24.17.0 y 26.0.0**, usando pnpm **11.8.0**: **193 pruebas por versión**, incluidas 40 de la CLI compilada, sin fallos ni omisiones. Pasa `git diff --check`.
+Las pruebas del ejecutable compilado comprueban códigos, stdout y stderr en ambos formatos para informes limpios, solo advertencias (las cuatro clases), solo errores y errores junto con advertencias (las cinco incidencias). También cubren ayuda, valores predeterminados, ejemplo alternativo, rutas con espacios, sintaxis inválida y cada código de fallo operativo. Usan proyectos temporales con valores inventados; comparan informes completos con los reporters existentes, parsean JSON y verifican ausencia de valores señuelo en ambos canales. Una instantánea recursiva de contenido y metadatos, antes y después de ejecutar ambos formatos con y sin permisos de solo lectura de Node, comprueba que no se ejecutan scripts, módulos, configuración ni comandos del entorno y no se modifica el proyecto. No constituye una instantánea atómica frente a cambios externos ni una revisión exhaustiva de CI.
+
+Verificación del paso 18: `pnpm typecheck` y `pnpm test` pasan con Node **24.17.0 y 26.0.0**, usando pnpm **11.8.0**: **215 pruebas por versión**, incluidas 62 de la CLI compilada (con subpruebas), sin fallos ni omisiones. Pasa `git diff --check`.
 
 ### Formato JSON de resultados
 
