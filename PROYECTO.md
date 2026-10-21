@@ -1,6 +1,6 @@
 # EnvClarity — definición inicial
 
-Nombre: EnvClarity. Estado: alcance definido; implementación pendiente.
+Nombre: EnvClarity. Estado: motor y reporters conectados a la CLI; códigos de salida pendientes de cierre.
 
 ## Objetivo
 
@@ -52,7 +52,7 @@ No resuelve alias, desestructuración, funciones envoltorio ni identificadores: 
 
 ### Lectura de archivos de entorno
 
-La capa de lectura `readEnv(files, environmentPath, examplePath)` recibe la sesión `ProjectFiles` del análisis y lee secuencialmente dos archivos acotados: `.env.example` por defecto (o la ruta explícita alternativa) y el archivo elegido, cuya ruta es obligatoria. Devuelve nombres documentados únicos y entradas `{ name, state }` ordenadas por nombre. Solo produce `present` y `empty`; un nombre ausente no genera una entrada. Todavía no realiza comparación ni se conecta con la CLI.
+La capa de lectura `readEnv(files, environmentPath, examplePath)` recibe la sesión `ProjectFiles` del análisis y lee secuencialmente dos archivos acotados: `.env.example` por defecto (o la ruta explícita alternativa) y el archivo elegido, cuya ruta es obligatoria. Devuelve nombres documentados únicos y entradas `{ name, state }` ordenadas por nombre. Solo produce `present` y `empty`; un nombre ausente no genera una entrada. `audit` coordina esta lectura y la comparación; la CLI consume su resultado.
 
 Se utiliza un lector propio que clasifica directamente por posiciones en el contenido acotado, sin construir cadenas de valores ni un objeto de valores parseados. Un `Map` conserva únicamente nombres y estados, incluidos nombres especiales como `__proto__`, sin asignar propiedades por nombre ni modificar prototipos. No se añaden dependencias. El contenido original permanece transitoriamente en memoria; no se garantiza su borrado físico. No se fusionan otros archivos ni `process.env`, no se modifica el entorno del proceso, no se expanden `$NAME`/`${NAME}` ni se ejecutan comandos o JavaScript.
 
@@ -68,13 +68,35 @@ El lector rechaza con `FORMAT_ERROR` las líneas no vacías ni de comentario sin
 
 Son comprobaciones concretas del formato admitido, no validación estricta de dotenv ni de identificadores. Una comilla posterior puede cerrar contenido multilínea y absorber declaraciones intermedias. Las comillas dentro de contenido sin comillas iniciales son texto literal; un nombre no vacío con `:` y `=` sigue siendo admisible. No se comprueba la codificación original: la lectura existente decodifica bytes como UTF-8 con sustitución de secuencias inválidas. No se prometen escapes, expansión ni semántica de shell.
 
-Los fallos operativos reutilizan `ScanError` y los códigos de `AuditFailureCode`: `READ_ERROR` para archivos ausentes, ilegibles o fallos nativos de lectura; `INVALID_INPUT` para rutas no admitidas; `LIMIT_EXCEEDED` para presupuestos y `FORMAT_ERROR` para los rechazos anteriores. Sus mensajes son constantes y no contienen rutas seleccionadas, valores, contenido, líneas completas, mensajes originales ni `cause`. El parsing de cada archivo ocurre dentro de la operación protegida de `ProjectFiles`: un fallo de formato invalida persistentemente la misma sesión, al igual que los de lectura, rutas o límites. Reparar el archivo no permite reanudar esa sesión; se necesita un análisis nuevo. Se conservan las protecciones de rutas y los presupuestos compartidos. Todavía no hay traducción de estos errores a salida CLI ni coordinación de un análisis completo.
+Los fallos operativos reutilizan `ScanError` y los códigos de `AuditFailureCode`: `READ_ERROR` para archivos ausentes, ilegibles o fallos nativos de lectura; `INVALID_INPUT` para rutas no admitidas; `LIMIT_EXCEEDED` para presupuestos y `FORMAT_ERROR` para los rechazos anteriores. Sus mensajes son constantes y no contienen rutas seleccionadas, valores, contenido, líneas completas, mensajes originales ni `cause`. El parsing de cada archivo ocurre dentro de la operación protegida de `ProjectFiles`: un fallo de formato invalida persistentemente la misma sesión, al igual que los de lectura, rutas o límites. Reparar el archivo no permite reanudar esa sesión; se necesita un análisis nuevo. Se conservan las protecciones de rutas y los presupuestos compartidos. `audit` descarta resultados parciales y la CLI presenta el fallo mediante el reporter seleccionado.
 
 Se evaluó [`util.parseEnv`](https://nodejs.org/download/release/v24.17.0/docs/api/util.html#utilparseenvcontent) y se descartó para este contrato: tanto Node 24.17.0 como 26.0.0 consumen incorrectamente la siguiente asignación después de espacios tras `=` y conservan `export` en el nombre de una asignación vacía. Además, 24.17.0 omite `__proto__` y 26.0.0 lo conserva. Las pruebas exigen los resultados correctos del lector propio, sin expectativas condicionadas por la versión.
 
+### Comando de auditoría
+
+Después de `pnpm build`, ejecutar:
+
+```sh
+node dist/cli.js check "/ruta/proyecto con espacios" --env "config/selected env"
+node dist/cli.js check "/ruta/proyecto con espacios" --env "config/selected env" --example "config/other example" --format json
+node dist/cli.js --help
+```
+
+`check` exige exactamente una raíz y `--env` explícito. El ejemplo predeterminado es `.env.example` y el formato predeterminado es `text`. Las rutas relativas de los archivos seleccionados parten de la raíz auditada, no del directorio actual; también se admiten rutas absolutas dentro de esa raíz. No se mezclan otros entornos ni `process.env`. La validación efectiva de rutas, enlaces y presupuestos permanece en la capa de lectura existente.
+
+El parser separado `parseCliArguments` usa `util.parseArgs` estricto y rechaza comandos desconocidos, posicionales sobrantes o vacíos, opciones desconocidas, duplicadas (aunque repitan valor), incompletas o vacías y formatos distintos de `text`/`json`. Admite `--option=value`, opciones después de `check` en cualquier orden y `--` para terminar opciones. La ayuda se muestra sin argumentos o con `--help`/`-h` usados solos; no permite combinarlos con una auditoría. Los errores de argumentos son constantes y nunca reproducen entradas ni errores nativos.
+
+La CLI llama a `audit` y entrega su resultado a `formatText` o `formatJson`, sin duplicar reglas ni construir otro informe. Para una invocación válida en JSON, stdout contiene únicamente un objeto JSON y un salto de línea, tanto en análisis completados como en fallos operativos; stderr queda vacío. En texto, el resultado también va a stdout. Una sintaxis inválida no selecciona formato: stdout queda vacío y stderr contiene `Invalid arguments. Use --help for usage.` seguido de un salto de línea, incluso si había un argumento `--format=json`. No se imprime ayuda ni progreso junto al resultado.
+
+**Comportamiento provisional del paso 17:** cualquier análisis completado devuelve `0`, también si el informe contiene incidencias de severidad error; los argumentos inválidos y fallos operativos devuelven `2`. Todavía no se emite `1` por errores de configuración. El cierre y la revisión exhaustiva de códigos de salida y canales corresponden al paso 18; hasta entonces, un consumidor debe consultar el informe para distinguir sus severidades.
+
+Las pruebas del ejecutable compilado comprueban ambos formatos, valores predeterminados, ejemplo alternativo, rutas con espacios, sintaxis inválida y fallos seguros de lectura, formato, rutas y tamaño. Usan proyectos temporales con valores inventados; comparan salidas con los reporters existentes, parsean JSON y verifican ausencia de valores señuelo. Una instantánea recursiva de contenido y metadatos, antes y después de ejecutar ambos formatos con y sin permisos de solo lectura de Node, comprueba que no se ejecutan scripts, módulos, configuración ni comandos del entorno y no se modifica el proyecto. No constituye una instantánea atómica frente a cambios externos ni una revisión exhaustiva de CI.
+
+Verificación del paso 17: `pnpm typecheck` y `pnpm test` pasan con Node **24.17.0 y 26.0.0**, usando pnpm **11.8.0**: **193 pruebas por versión**, incluidas 40 de la CLI compilada, sin fallos ni omisiones. Pasa `git diff --check`.
+
 ### Formato JSON de resultados
 
-El módulo puro `formatJson(result: AuditResult): string`, en `src/reporters/json.ts`, devuelve un único objeto JSON compacto, sin texto decorativo ni salto de línea final. No imprime ni lee archivos. Consume el contrato tipado existente; no valida JSON externo. Todavía no está conectado a la CLI ni decide códigos de salida.
+El módulo puro `formatJson(result: AuditResult): string`, en `src/reporters/json.ts`, devuelve un único objeto JSON compacto, sin texto decorativo ni salto de línea final. No imprime ni lee archivos. Consume el contrato tipado existente; no valida JSON externo. La CLI lo reutiliza y añade un salto de línea; el reporter no decide códigos de salida.
 
 Un análisis completado se representa como `{ "status": "completed", "report": AuditReport }`. Conserva `report.schemaVersion: 1`, sin introducir otra versión ni duplicar el contrato. `completed` significa que el análisis terminó, incluso cuando hay incidencias de severidad `error`; la cobertura limitada tampoco es un fallo operativo.
 
