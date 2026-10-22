@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 const packedFiles = [
+  "README.md",
   "dist/audit.js", "dist/cli-args.js", "dist/cli.js",
   "dist/core/analyze.js", "dist/core/compare.js", "dist/core/report.js",
   "dist/io/discover.js", "dist/io/read-env.js",
@@ -25,7 +26,7 @@ function command(executable: string, args: string[], cwd: string) {
   return result.stdout;
 }
 
-test("local package contains only runtime files and works as an isolated production installation", async (t) => {
+test("local package contains only runtime files and README and works as an isolated production installation", async (t) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "envclarity-package-")));
   t.after(() => rm(root, { recursive: true, force: true }));
   const archive = join(root, "envclarity.tgz");
@@ -37,7 +38,7 @@ test("local package contains only runtime files and works as an isolated product
   const manifest = JSON.parse(await readFile(join(root, "package/package.json"), "utf8"));
   assert.equal(manifest.private, true);
   assert.deepEqual(manifest.bin, { envclarity: "dist/cli.js" });
-  assert.deepEqual([...manifest.files].sort(), packedFiles.filter(path => path !== "package.json"));
+  assert.deepEqual([...manifest.files].sort(), packedFiles.filter(path => path !== "package.json" && path !== "README.md"));
   assert.deepEqual(Object.keys(manifest.dependencies), ["typescript"]);
   assert.equal(typeof manifest.dependencies.typescript, "string");
   const packedCli = join(root, "package/dist/cli.js");
