@@ -230,3 +230,11 @@ pnpm test:package
 ```
 
 `test` builds and runs the functional suite. `test:package` separately packs the CLI, checks the exact archive inventory and verifies an isolated production installation. Its offline installation requires a pnpm store already populated with the runtime dependencies, normally by the repository install above, and write access to that store.
+
+### GitHub Actions
+
+The [CI workflow](.github/workflows/ci.yml) is configured for pushes and pull requests on `macos-15`, with separate jobs for Node **24.17.0** and **26.0.0**. It reads the pnpm version from `package.json`, prints the tool versions, then runs `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test` and `pnpm test:package` in that order. The install populates the store before the package test installs offline. No separate build step is needed: `test` builds the CLI and packing builds it again through `prepack`.
+
+Actions are pinned to full commit hashes. The workflow grants only `contents: read`, disables persisted checkout credentials and requires no configured secrets. It does not publish packages, releases or artifacts.
+
+The current tests have been verified locally on macOS with both Node versions. The first GitHub-hosted execution of this workflow is still pending validation; Linux and Windows are not included.
