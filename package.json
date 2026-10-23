@@ -24,14 +24,23 @@
     "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "pnpm build && node --test test/*.test.ts",
-    "test:package": "node --test test/packaging/*.test.ts"
+    "test:package": "node --test test/packaging/*.test.ts",
+    "viewer:dev": "vite viewer --config viewer/vite.config.ts",
+    "viewer:build": "pnpm viewer:typecheck && vite build viewer --config viewer/vite.config.ts",
+    "viewer:typecheck": "tsc -p viewer/tsconfig.json && tsc -p viewer/tsconfig.node.json"
   },
   "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": "^24.17.0 || ^26.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2"
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.5"
   },
   "dependencies": {
     "typescript": "^6.0.3"

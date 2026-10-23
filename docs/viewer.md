@@ -1,12 +1,12 @@
 # Local report viewer
 
-Status: proposed scope and visual direction for owner review. The viewer is not implemented. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
+Status: scope and visual direction approved. The React/Vite starting screen is implemented; report import, validation and exploration are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
 
 ## Purpose and boundary
 
 Import one JSON result produced by the CLI, understand its summary and coverage, and locate findings through filters. The browser does not scan source files, read environment files, run an audit or modify an audited project.
 
-Use React, TypeScript and Vite within this repository, with pnpm and the existing Node support range. Dependency installation requires a separate owner decision. No additional workspace, account system, database, remote API, analytics or external asset service is needed.
+Use React, TypeScript and Vite within this repository, with pnpm and the existing Node support range. The owner approved the initial React/Vite dependencies. No additional workspace, account system, database, remote API, analytics or external asset service is needed.
 
 The local development server serves the viewer assets. Report contents are processed in browser memory and are not sent to it or another service. Do not add report uploads, browser storage, automatic restore or network requests carrying report data. Use system fonts and bundled assets. Names and paths may still be sensitive, even though the CLI excludes environment values.
 
@@ -118,4 +118,12 @@ Keep the current CLI package allowlist. New viewer source, dependencies used onl
 - Complete core actions by keyboard with labels, visible focus, semantic headings, accessible progress/errors and responsive layouts.
 - Compile the browser without Node or compiler modules, and keep CLI checks and the isolated CLI package test passing.
 
-The owner reviews this scope, proposed visual direction, states and folder boundary before interface implementation. Installation, runtime validation, import and exploration are separate subsequent changes. This document authorizes none of them by itself and does not claim that the viewer already exists.
+The starting screen implements only the agreed React/Vite setup and visual direction. Runtime validation, report import and exploration remain separate changes and are not available yet.
+
+## Run the starting screen
+
+Install the repository dependencies with `pnpm install --frozen-lockfile`, then run `pnpm viewer:dev` from the repository root. Open the loopback URL printed by Vite. The current screen is a placeholder and cannot import reports yet.
+
+Run `pnpm viewer:typecheck` to check browser code and the Vite configuration separately. Run `pnpm viewer:build` to check types and generate `viewer/dist/`. The existing CLI commands and its root `dist/` output remain separate.
+
+React, React DOM and Vite are development dependencies of this repository: Vite bundles the browser runtime into the viewer build. They are not runtime dependencies of the distributed CLI. The CLI package allowlist excludes the viewer source and build output.
