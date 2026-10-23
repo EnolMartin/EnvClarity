@@ -1,6 +1,6 @@
 # Local report viewer
 
-Status: scope and visual direction approved. The React/Vite starting screen is implemented; report import, validation and exploration are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
+Status: scope and visual direction approved. The React/Vite starting screen and bounded report validator are implemented; file import and exploration are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
 
 ## Purpose and boundary
 
@@ -74,7 +74,7 @@ Require supported status/code/severity combinations, correctly shaped references
 Initial viewer limits, to enforce and test when validation is implemented:
 
 - 10 MiB per imported JSON file, checked before reading.
-- 20,000 issues and 100,000 reference/location objects in total across all report lists; count before deduplication.
+- 20,000 issues and 100,000 reference and location objects in total across all report lists. Each reference and its nested location count as two objects; repeated occurrences count separately, before any deduplication.
 - 1,024 UTF-16 code units per variable name and 4,096 per source path.
 - Only the known schema shape; no recursive extension objects, arbitrary HTML or executable metadata.
 
@@ -118,7 +118,7 @@ Keep the current CLI package allowlist. New viewer source, dependencies used onl
 - Complete core actions by keyboard with labels, visible focus, semantic headings, accessible progress/errors and responsive layouts.
 - Compile the browser without Node or compiler modules, and keep CLI checks and the isolated CLI package test passing.
 
-The starting screen implements only the agreed React/Vite setup and visual direction. Runtime validation, report import and exploration remain separate changes and are not available yet.
+The starting screen implements only the agreed React/Vite setup and visual direction. Runtime validation is implemented as a pure module; report import and exploration are not available in the interface yet.
 
 ## Run the starting screen
 
@@ -127,3 +127,11 @@ Install the repository dependencies with `pnpm install --frozen-lockfile`, then 
 Run `pnpm viewer:typecheck` to check browser code and the Vite configuration separately. Run `pnpm viewer:build` to check types and generate `viewer/dist/`. The existing CLI commands and its root `dist/` output remain separate.
 
 React, React DOM and Vite are development dependencies of this repository: Vite bundles the browser runtime into the viewer build. They are not runtime dependencies of the distributed CLI. The CLI package allowlist excludes the viewer source and build output.
+
+## Runtime validator
+
+`viewer/src/report/validate.ts` exports `validateReportJson(text)` and `REPORT_LIMITS`. The result contains either an allowlisted `AuditResult` or one safe error code: `INVALID_JSON`, `INVALID_REPORT`, `UNSUPPORTED_SCHEMA` or `LIMIT_EXCEEDED`. A valid operational failure remains a valid audit result. Unknown fields are rejected for schema 1; its four coverage limitations must be present without duplicates. Unsupported positive integer versions are identified before enforcing the schema 1 report fields.
+
+The validator checks UTF-8 byte size before JSON parsing, but the future file picker must also check `File.size` before reading. It preserves issue/reference order and duplicates, validates summary counts, and projects fresh objects without rendering, logging, persistence or network access. Control characters and HTML-like labels remain plain data for safe display in a later step.
+
+Run `pnpm test` for contract and boundary tests, including reports produced by the CLI core, through the existing Node test runner. The validator imports the shared contract only as types and adds no runtime dependency.
