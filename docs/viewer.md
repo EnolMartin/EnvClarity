@@ -1,6 +1,6 @@
 # Local report viewer
 
-Status: scope and visual direction approved. The React/Vite starting screen and bounded report validator are implemented; file import and exploration are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
+Status: scope and visual direction approved. Local JSON import, bounded validation, summary and coverage are implemented. Finding details and filters are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
 
 ## Purpose and boundary
 
@@ -8,7 +8,7 @@ Import one JSON result produced by the CLI, understand its summary and coverage,
 
 Use React, TypeScript and Vite within this repository, with pnpm and the existing Node support range. The owner approved the initial React/Vite dependencies. No additional workspace, account system, database, remote API, analytics or external asset service is needed.
 
-The local development server serves the viewer assets. Report contents are processed in browser memory and are not sent to it or another service. Do not add report uploads, browser storage, automatic restore or network requests carrying report data. Use system fonts and bundled assets. Names and paths may still be sensitive, even though the CLI excludes environment values.
+The local development server serves the viewer assets. Report contents are processed in browser memory and are not sent to it or another service. Do not add report uploads, browser storage, automatic restore or network requests carrying report data. Use local system fonts and bundled assets, including self-hosted IBM Plex Mono; do not request fonts from external services. Names and paths may still be sensitive, even though the CLI excludes environment values.
 
 ## Import and exploration
 
@@ -24,7 +24,7 @@ Use pages of 50 findings to bound the rendered list; changing a filter resets th
 
 ## Proposed visual direction
 
-A restrained utility interface: light neutral background, white content surfaces, dark readable text, a blue primary action and borders to separate groups. Error and warning labels use red and amber accents together with explicit text and symbols; color is never the only distinction. System fonts, modest spacing and no animation required for core tasks.
+A restrained console interface: near-black background with a faint grid, dark green panels, light readable text, a lime-green primary action with dark text and angular borders to separate groups. Error and warning labels use red and amber accents together with explicit text and symbols; color is never the only distinction. Local system monospace fonts for headings, controls and counts, self-hosted IBM Plex Mono for supporting text, modest spacing and no animation required for core tasks.
 
 One page, without a sidebar or decorative dashboard charts:
 
@@ -118,11 +118,11 @@ Keep the current CLI package allowlist. New viewer source, dependencies used onl
 - Complete core actions by keyboard with labels, visible focus, semantic headings, accessible progress/errors and responsive layouts.
 - Compile the browser without Node or compiler modules, and keep CLI checks and the isolated CLI package test passing.
 
-The starting screen implements only the agreed React/Vite setup and visual direction. Runtime validation is implemented as a pure module; report import and exploration are not available in the interface yet.
+The current interface imports and validates local results and displays the full summary and coverage. Finding details, search, filters and pagination remain pending.
 
-## Run the starting screen
+## Run the viewer
 
-Install the repository dependencies with `pnpm install --frozen-lockfile`, then run `pnpm viewer:dev` from the repository root. Open the loopback URL printed by Vite. The current screen is a placeholder and cannot import reports yet.
+Install the repository dependencies with `pnpm install --frozen-lockfile`, then run `pnpm viewer:dev` from the repository root. Open the loopback URL printed by Vite. Choose a local CLI JSON result to display its summary and coverage. The viewer does not scan projects or environment files.
 
 Run `pnpm viewer:typecheck` to check browser code and the Vite configuration separately. Run `pnpm viewer:build` to check types and generate `viewer/dist/`. The existing CLI commands and its root `dist/` output remain separate.
 
@@ -132,6 +132,18 @@ React, React DOM and Vite are development dependencies of this repository: Vite 
 
 `viewer/src/report/validate.ts` exports `validateReportJson(text)` and `REPORT_LIMITS`. The result contains either an allowlisted `AuditResult` or one safe error code: `INVALID_JSON`, `INVALID_REPORT`, `UNSUPPORTED_SCHEMA` or `LIMIT_EXCEEDED`. A valid operational failure remains a valid audit result. Unknown fields are rejected for schema 1; its four coverage limitations must be present without duplicates. Unsupported positive integer versions are identified before enforcing the schema 1 report fields.
 
-The validator checks UTF-8 byte size before JSON parsing, but the future file picker must also check `File.size` before reading. It preserves issue/reference order and duplicates, validates summary counts, and projects fresh objects without rendering, logging, persistence or network access. Control characters and HTML-like labels remain plain data for safe display in a later step.
+The validator checks UTF-8 byte size before JSON parsing, and the file picker also checks `File.size` before reading. It preserves issue/reference order and duplicates, validates summary counts, and projects fresh objects without rendering, logging, persistence or network access. Control characters and HTML-like labels remain plain data for safe display in a later step.
 
 Run `pnpm test` for contract and boundary tests, including reports produced by the CLI core, through the existing Node test runner. The validator imports the shared contract only as types and adds no runtime dependency.
+
+## Local import and summary
+
+Choose one JSON result through the file picker; its extension is a picker hint, not a validity check. The viewer checks the 10 MiB size limit before reading, then validates the text. It shows error, warning and finding counts for a completed result, including a zero-finding result, alongside all reported analysis limitations. A valid CLI failure gets a separate explanation without a summary. Import errors provide fixed guidance without displaying the file name, raw contents or parser exception.
+
+A new selection immediately replaces the previous result with a reading state; only the latest read may update the screen. Clearing invalidates pending reads and returns to the initial screen. Canceling selection leaves the current state unchanged, and the same file can be selected again. Pending reads are ignored after unmounting. A superseded read is not physically aborted; each read is bounded by the file size check. Reports remain in component memory, without upload, browser storage or automatic restore.
+
+The current release shows summary counts only; use the CLI output to inspect individual findings until the next viewer step. Import lifecycle tests run with the existing `pnpm test` command and use synthetic in-memory files.
+
+## Bundled font
+
+Supporting text uses IBM Plex Mono Regular and SemiBold from the official `@ibm/plex-mono` 2.5.0 package ([IBM Plex](https://github.com/IBM/plex)). Only the unmodified WOFF2 font files and their OFL license are included in `viewer/public/fonts/ibm-plex-mono/`; the package is not installed or executed. The build copies these assets and the license into the viewer output. Headings retain their local system monospace stack. Font requests stay on the viewer's own origin.
