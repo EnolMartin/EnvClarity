@@ -4,6 +4,8 @@ EnvClarity checks how a TypeScript, Node or Vite project uses environment variab
 
 The example file defines the expected names. A source reference alone does not prove that a variable is required: the application may have defaults or optional behavior.
 
+Version **0.1.0** remains private and available for local use. Independent user validation is pending; technical checks do not establish usability or demand. No registry release is announced.
+
 ## Requirements
 
 - Node **24.17.0 or later in the 24.x line**, or **26.0.0 or later in the 26.x line** (`^24.17.0 || ^26.0.0`). Node 25 and other major versions are outside the declared support range.
@@ -159,6 +161,25 @@ Audits write their result to stdout and leave stderr empty, including operationa
 
 Warning-only audits exit `0`. In particular, unresolved dynamic references do not fail a CI check by themselves. `completed` means the audit finished within its scope, even if it found errors or has coverage limitations.
 
+## JSON contract
+
+The CLI emits an `AuditResult`: either `{ "status": "completed", "report": AuditReport }` or `{ "status": "failed", "code": AuditFailureCode }`. The package version (`0.1.0`) and report schema version (`1`) are separate. Only completed results contain a report and its `schemaVersion`.
+
+| Object | Fields |
+| --- | --- |
+| `AuditReport` | `schemaVersion: 1`, `summary`, `issues`, `references`, `coverage` |
+| Summary | `errorCount`, `warningCount` (issue counts) |
+| Variable issue | `code`, `severity`, `name`, `references` (possibly empty) |
+| Dynamic issue | `code: "DYNAMIC_REFERENCE"`, `severity: "warning"`, `reference` (no inferred name) |
+| Variable reference | `name`, `origin`, `location` |
+| Dynamic reference | `origin`, `location` |
+| Location | Project-relative `path`, one-based `line` and `column` |
+| Coverage | `scope: "direct-references"`, `limitations` |
+
+`origin` is `process.env` or `import.meta.env`. Issue codes and severities are listed above. The four coverage limitation codes are `ALIASES_NOT_RESOLVED`, `DESTRUCTURING_NOT_RESOLVED`, `WRAPPERS_NOT_RESOLVED` and `DYNAMIC_REFERENCES_NOT_RESOLVED`. Failed results contain only `status` and one of the four operational codes listed under CLI and exit codes, without a report or partial results.
+
+References are sorted by relative path, numeric line/column, origin and name. Issues are sorted by their first reference location (unlocated issues last), code and contract fields to break ties. Exact duplicates are removed. Identical inputs produce deterministic output without timestamps. The JSON reporter projects only contract fields, preserving the report's order and counts. Values, source snippets and original errors are excluded; names and paths remain visible. This describes CLI output, not validation of arbitrary externally supplied JSON.
+
 ## Source coverage and limitations
 
 EnvClarity parses `.ts`, `.tsx`, `.js` and `.jsx` files using the TypeScript syntax tree. It recognizes direct accesses such as:
@@ -237,4 +258,4 @@ The [CI workflow](.github/workflows/ci.yml) is configured for pushes and pull re
 
 Actions are pinned to full commit hashes. The workflow grants only `contents: read`, disables persisted checkout credentials and requires no configured secrets. It does not publish packages, releases or artifacts.
 
-The current tests have been verified locally on macOS with both Node versions. The first GitHub-hosted execution of this workflow is still pending validation; Linux and Windows are not included.
+The tests have been verified locally on macOS with both Node versions. Both GitHub-hosted jobs also passed for commit `dc0cc61d887c37503eb98102bfb9fdb9bf20cf52` ([CI run](https://github.com/EnolMartin/EnvClarity/actions/runs/39848307131)), including types, functional tests and the local package check. This records that commit's result; subsequent changes need their own checks. Linux and Windows are not included.
