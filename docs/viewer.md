@@ -1,6 +1,6 @@
 # Local report viewer
 
-Status: scope and visual direction approved. Local JSON import, bounded validation, summary and coverage are implemented. Finding details and filters are still pending. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
+Status: scope and visual direction approved. Local JSON import, bounded validation, summary and coverage are implemented. Finding details, combined filters and bounded pagination are implemented. The CLI remains the source of audit results. Independent usability validation is pending; the viewer is an optional way to explore an existing report.
 
 ## Purpose and boundary
 
@@ -24,7 +24,7 @@ Use pages of 50 findings to bound the rendered list; changing a filter resets th
 
 ## Proposed visual direction
 
-A restrained console interface: near-black background with a faint grid, dark green panels, light readable text, a lime-green primary action with dark text and angular borders to separate groups. Error and warning labels use red and amber accents together with explicit text and symbols; color is never the only distinction. Local system monospace fonts for headings, controls and counts, self-hosted IBM Plex Mono for supporting text, modest spacing and no animation required for core tasks.
+A restrained console interface: solid near-black background with a green-charcoal tint, dark green panels, light readable text, a lime-green primary action with dark text and angular borders to separate groups. Error and warning labels use red and amber accents together with explicit text and symbols; color is never the only distinction. Local system monospace fonts for headings, controls and counts, self-hosted IBM Plex Mono for supporting text, modest spacing and no animation required for core tasks.
 
 One page, without a sidebar or decorative dashboard charts:
 
@@ -118,7 +118,7 @@ Keep the current CLI package allowlist. New viewer source, dependencies used onl
 - Complete core actions by keyboard with labels, visible focus, semantic headings, accessible progress/errors and responsive layouts.
 - Compile the browser without Node or compiler modules, and keep CLI checks and the isolated CLI package test passing.
 
-The current interface imports and validates local results and displays the full summary and coverage. Finding details, search, filters and pagination remain pending.
+The current interface imports and validates local results and displays the full summary and coverage. Findings can be explored with severity/type filters, name/path search and pagination.
 
 ## Run the viewer
 
@@ -142,8 +142,18 @@ Choose one JSON result through the file picker; its extension is a picker hint, 
 
 A new selection immediately replaces the previous result with a reading state; only the latest read may update the screen. Clearing invalidates pending reads and returns to the initial screen. Canceling selection leaves the current state unchanged, and the same file can be selected again. Pending reads are ignored after unmounting. A superseded read is not physically aborted; each read is bounded by the file size check. Reports remain in component memory, without upload, browser storage or automatic restore.
 
-The current release shows summary counts only; use the CLI output to inspect individual findings until the next viewer step. Import lifecycle tests run with the existing `pnpm test` command and use synthetic in-memory files.
+Individual findings are shown below the complete report summary and coverage. Import lifecycle tests run with the existing `pnpm test` command and use synthetic in-memory files.
 
 ## Bundled font
 
 Supporting text uses IBM Plex Mono Regular and SemiBold from the official `@ibm/plex-mono` 2.5.0 package ([IBM Plex](https://github.com/IBM/plex)). Only the unmodified WOFF2 font files and their OFL license are included in `viewer/public/fonts/ibm-plex-mono/`; the package is not installed or executed. The build copies these assets and the license into the viewer output. Headings retain their local system monospace stack. Font requests stay on the viewer's own origin.
+
+## Explore findings
+
+Each finding shows its severity, code, variable name when known and a cautious explanation. Dynamic references do not invent a name; findings without a recorded location say so. Expand a location group to see paths, one-based line/column and reference origins. Lists show at most 50 findings per page and 50 locations per expanded group. Closed groups do not render their location lists.
+
+Severity, type and search combine. Search matches literal case-insensitive substrings of variable names or any source path; it does not interpret regex or search explanations/source contents. A location match retains every location of that finding. Filtering preserves report order and never changes the full summary, original names, references or comparison rules. Changing or resetting a filter returns to finding page 1; choosing another report resets all filters. Counts say how many findings match, separately from the report totals.
+
+Names and paths render as text inside bidirectional isolation, with control/formatting characters displayed as explicit Unicode escapes. Spaces are preserved and long labels wrap. HTML, Markdown and ANSI sequences are not interpreted, and paths/URLs do not become links or file actions. Pure filter/label tests run through `pnpm test`; browser checks use synthetic reports.
+
+The severity and type controls use local select-only comboboxes so their popup and hover/active states follow the console palette instead of the operating system's blue menu. They support pointer selection, arrows, Home/End, Enter/Space, letter search and Tab selection; Escape cancels and outside clicks close the popup. Active options scroll into view. The implementation follows the [WAI select-only combobox guidance](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-select-only/); dedicated assistive-technology and mobile checks remain part of the accessibility review.

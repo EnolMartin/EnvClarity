@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AuditFailureCode, CoverageLimitation } from "../../src/core/types.js";
+import { Findings } from "./components/Findings";
 import { createReportImporter } from "./report/import";
 import type { ImportState } from "./report/import";
 
@@ -28,6 +29,7 @@ const coverageMessages: Record<CoverageLimitation, string> = {
 
 export function App() {
   const [state, setState] = useState<ImportState>({ status: "idle" });
+  const [reportKey, setReportKey] = useState(0);
   const [importer] = useState(() => createReportImporter(setState));
   const picker = useRef<HTMLInputElement>(null);
   useEffect(() => () => importer.cancel(), [importer]);
@@ -55,7 +57,10 @@ export function App() {
             onChange={event => {
               const file = event.currentTarget.files?.[0];
               event.currentTarget.value = "";
-              if (file !== undefined) void importer.load(file);
+              if (file !== undefined) {
+                setReportKey(key => key + 1);
+                void importer.load(file);
+              }
             }}
           />
           <button type="button" className="primary-button" onClick={() => picker.current?.click()}>
@@ -93,19 +98,20 @@ export function App() {
           <>
             <section className="empty-state" aria-labelledby="summary-title">
               <h2 id="summary-title">Audit summary</h2>
-              <p>{report.issues.length === 0 ? "No findings were detected within the analysis scope." : "Findings were detected. Review the CLI report for details."}</p>
+              <p>{report.issues.length === 0 ? "No findings were detected within the analysis scope." : "Findings were detected. Explore them below."}</p>
               <dl className="summary-counts">
                 <div><dt>Errors</dt><dd>{report.summary.errorCount}</dd></div>
                 <div><dt>Warnings</dt><dd>{report.summary.warningCount}</dd></div>
                 <div><dt>Findings</dt><dd>{report.issues.length}</dd></div>
               </dl>
-              <p className="section-note">Counts describe the complete report. Finding details and filters are not available here yet.</p>
+              <p className="section-note">Counts describe the complete report and do not change when you filter findings.</p>
             </section>
             <section className="empty-state coverage" aria-labelledby="coverage-title">
               <h2 id="coverage-title">Coverage: direct references only</h2>
               <p>A completed audit does not guarantee correct runtime or deployment configuration. These are analysis limits, not patterns confirmed in your project.</p>
               <ul>{report.coverage.limitations.map(limit => <li key={limit}>{coverageMessages[limit]}</li>)}</ul>
             </section>
+            <Findings key={reportKey} report={report} />
           </>
         )}
       </main>
