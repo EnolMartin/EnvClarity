@@ -118,7 +118,7 @@ Keep the current CLI package allowlist. New viewer source, dependencies used onl
 - Complete core actions by keyboard with labels, visible focus, semantic headings, accessible progress/errors and responsive layouts.
 - Compile the browser without Node or compiler modules, and keep CLI checks and the isolated CLI package test passing.
 
-The current interface imports and validates local results and displays the full summary and coverage. Findings can be explored with severity/type filters, name/path search and pagination.
+The current interface imports and validates local results and displays the full summary and coverage. An empty report keeps the coverage visible and omits finding filters. Findings can be explored with severity/type filters, name/path search and pagination.
 
 ## Run the viewer
 
@@ -157,3 +157,13 @@ Severity, type and search combine. Search matches literal case-insensitive subst
 Names and paths render as text inside bidirectional isolation, with control/formatting characters displayed as explicit Unicode escapes. Spaces are preserved and long labels wrap. HTML, Markdown and ANSI sequences are not interpreted, and paths/URLs do not become links or file actions. Pure filter/label tests run through `pnpm test`; browser checks use synthetic reports.
 
 The severity and type controls use local select-only comboboxes so their popup and hover/active states follow the console palette instead of the operating system's blue menu. They support pointer selection, arrows, Home/End, Enter/Space, letter search and Tab selection; Escape cancels and outside clicks close the popup. Active options scroll into view. The implementation follows the [WAI select-only combobox guidance](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-select-only/); dedicated assistive-technology and mobile checks remain part of the accessibility review.
+
+## Interface states and recovery
+
+The initial screen explains the CLI JSON format and offers file selection. During reading/validation, a dedicated panel explains local processing; the live status announces progress and the secondary action becomes **Cancel import**. Choosing another file replaces the current attempt. Cancellation returns to the initial screen and ignores later completion or rejection of the old read.
+
+Import errors have distinct headings for malformed JSON, invalid report structure, unsupported schema, exceeded limits, oversized files and unreadable files. Every error retains the replacement/clear actions. Failed CLI audits remain valid imported results with code-specific guidance and no summary or filters. Errors and in-flight reads never show an old completed result as current.
+
+A completed report with zero findings shows zero totals, an explicit scope caveat and coverage limitations, without empty exploration controls. A filtered report with zero matches keeps the complete summary and coverage, explains how to change the search or reset filters, and omits an empty findings list and pagination. Clearing returns to initial instructions. No state promises full configuration, runtime or deployment validation.
+
+The native test suite covers error/retry transitions and cancellation with delayed reads. Browser checks cover initial, completed, empty, no-match, invalid JSON/structure, unsupported schema, all four CLI failure results and recovery with synthetic reports. Loading and local read-failure transitions are checked deterministically in the import tests; no artificial delay is added to the product.

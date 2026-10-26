@@ -98,3 +98,38 @@ test("viewer an oversized replacement invalidates an older read and permits retr
   await importer.load({ size: json.length, text: async () => json });
   assert.deepEqual(states.at(-1), { status: "loaded", result });
 });
+
+
+test("viewer replaces a loaded report with each validation error and recovers without stale data", async () => {
+  const cases = [
+    { json: "{PRIVATE_CANARY", error: "INVALID_JSON" },
+    { json: JSON.stringify({ ...result, report: { ...result.report, summary: { errorCount: 1, warningCount: 0 } } }), error: "INVALID_REPORT" },
+    { json: JSON.stringify({ ...result, report: { ...result.report, schemaVersion: 2 } }), error: "UNSUPPORTED_SCHEMA" },
+    { json: JSON.stringify({ ...result, report: { ...result.report, references: [{ name: "x".repeat(REPORT_LIMITS.nameLength + 1), origin: "process.env", location: { path: "src/a.ts", line: 1, column: 1 } }] } }), error: "LIMIT_EXCEEDED" },
+  ];
+  for (const invalid of cases) {
+    const { importer, states } = setup();
+    await importer.load({ size: json.length, text: async () => json });
+    const start = states.length;
+    await importer.load({ size: invalid.json.length, text: async () => invalid.json });
+    assert.deepEqual(states.slice(start), [{ status: "loading" }, { status: "error", error: invalid.error }]);
+    await importer.load({ size: json.length, text: async () => json });
+    assert.deepEqual(states.at(-1), { status: "loaded", result });
+    assert.equal(JSON.stringify(states).includes("PRIVATE_CANARY"), false);
+  }
+});
+
+test("viewer clearing an import ignores late read failures and permits another report", async () => {
+  const { importer, states } = setup();
+  const pending = pendingFile();
+  const reading = importer.load(pending.file);
+  assert.deepEqual(states.at(-1), { status: "loading" });
+  importer.clear();
+  const cleared = [...states];
+  pending.reject(new Error("PRIVATE_CANARY"));
+  await reading;
+  assert.deepEqual(states, cleared);
+  assert.deepEqual(states.at(-1), { status: "idle" });
+  await importer.load({ size: json.length, text: async () => json });
+  assert.deepEqual(states.at(-1), { status: "loaded", result });
+});

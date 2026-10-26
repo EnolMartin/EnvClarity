@@ -13,6 +13,15 @@ const importErrors = {
   FILE_READ_ERROR: "The file could not be read. Try selecting it again or choose another report.",
 } as const;
 
+const importErrorTitles: Record<keyof typeof importErrors, string> = {
+  INVALID_JSON: "Invalid JSON file",
+  INVALID_REPORT: "Invalid audit report",
+  UNSUPPORTED_SCHEMA: "Report version not supported",
+  LIMIT_EXCEEDED: "Report exceeds viewer limits",
+  FILE_TOO_LARGE: "File is too large",
+  FILE_READ_ERROR: "File could not be read",
+};
+
 const failureMessages: Record<AuditFailureCode, string> = {
   INVALID_INPUT: "The CLI could not start the audit. Check its arguments and generate another report.",
   READ_ERROR: "The CLI could not read the selected project or environment files. Check access and run it again.",
@@ -67,13 +76,13 @@ export function App() {
             {state.status === "idle" ? "Choose JSON report" : "Choose another report"}
           </button>
           {state.status !== "idle" && (
-            <button type="button" className="secondary-button" onClick={() => importer.clear()}>Clear report</button>
+            <button type="button" className="secondary-button" onClick={() => importer.clear()}>{state.status === "loading" ? "Cancel import" : "Clear report"}</button>
           )}
         </div>
         <p className="privacy-note">Up to 10 MiB. Your report stays in this browser tab and is not uploaded or saved.</p>
         <p role="status" className="reading-status">
           {state.status === "loading" ? "Reading and validating report…" : ""}
-          {state.status === "loaded" ? (report ? "Report loaded." : "Audit failure result loaded.") : ""}
+          {state.status === "loaded" ? (report ? `Report loaded. ${report.issues.length} ${report.issues.length === 1 ? "finding" : "findings"} within the analysis scope.` : "Audit failure result loaded.") : ""}
         </p>
         {state.status === "idle" && (
           <section className="empty-state" aria-labelledby="start-title">
@@ -81,9 +90,15 @@ export function App() {
             <p>Generate a result using <code>envclarity check &lt;project&gt; --env &lt;file&gt; --format json</code> and save its output to a JSON file. Then choose that file here.</p>
           </section>
         )}
+        {state.status === "loading" && (
+          <section className="empty-state" aria-labelledby="loading-title" aria-busy="true">
+            <h2 id="loading-title">Opening your report</h2>
+            <p>The file is being read and checked locally. You can choose another report or cancel this import.</p>
+          </section>
+        )}
         {state.status === "error" && (
           <section className="empty-state" role="alert">
-            <h2>Could not open report</h2>
+            <h2>{importErrorTitles[state.error]}</h2>
             <p>{importErrors[state.error]}</p>
           </section>
         )}
@@ -98,20 +113,20 @@ export function App() {
           <>
             <section className="empty-state" aria-labelledby="summary-title">
               <h2 id="summary-title">Audit summary</h2>
-              <p>{report.issues.length === 0 ? "No findings were detected within the analysis scope." : "Findings were detected. Explore them below."}</p>
+              <p>{report.issues.length === 0 ? "No findings were detected within the analysis scope. Review the coverage limits below; this does not guarantee a correct configuration." : "Findings were detected. Explore them below."}</p>
               <dl className="summary-counts">
                 <div><dt>Errors</dt><dd>{report.summary.errorCount}</dd></div>
                 <div><dt>Warnings</dt><dd>{report.summary.warningCount}</dd></div>
                 <div><dt>Findings</dt><dd>{report.issues.length}</dd></div>
               </dl>
-              <p className="section-note">Counts describe the complete report and do not change when you filter findings.</p>
+              <p className="section-note">{report.issues.length === 0 ? "Choose another report above to inspect a different audit." : "Counts describe the complete report and do not change when you filter findings."}</p>
             </section>
             <section className="empty-state coverage" aria-labelledby="coverage-title">
               <h2 id="coverage-title">Coverage: direct references only</h2>
               <p>A completed audit does not guarantee correct runtime or deployment configuration. These are analysis limits, not patterns confirmed in your project.</p>
               <ul>{report.coverage.limitations.map(limit => <li key={limit}>{coverageMessages[limit]}</li>)}</ul>
             </section>
-            <Findings key={reportKey} report={report} />
+            {report.issues.length > 0 && <Findings key={reportKey} report={report} />}
           </>
         )}
       </main>

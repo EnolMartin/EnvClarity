@@ -72,10 +72,13 @@ export function Findings({ report }: { readonly report: AuditReport }) {
         <p role="status">Showing {matches.length} of {report.issues.length} findings</p>
         <button type="button" className="secondary-button" onClick={() => update(EMPTY_FILTERS)}>Reset filters</button>
       </div>
-      {matches.length === 0 && <p>{report.issues.length === 0 ? "This report has no findings within the analysis scope." : "No findings match these filters. Reset them to see all findings."}</p>}
-      <ol className="finding-list" start={page * FINDINGS_PAGE_SIZE + 1}>
+      {matches.length === 0 && <div className="no-matches">
+        <h3>No matching findings</h3>
+        <p>Try another variable name or source path, change the filters, or reset them to see all findings. The report summary above still includes every finding.</p>
+      </div>}
+      {matches.length > 0 && <ol className="finding-list" start={page * FINDINGS_PAGE_SIZE + 1}>
         {matches.slice(page * FINDINGS_PAGE_SIZE, (page + 1) * FINDINGS_PAGE_SIZE).map(({ issue, index }) => <li key={index}><Finding issue={issue} /></li>)}
-      </ol>
+      </ol>}
       {matches.length > 0 && <nav className="pagination" aria-label="Findings pages">
         <button type="button" className="secondary-button" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
         <span>Page {page + 1} of {pages}</span>
