@@ -71,7 +71,7 @@ Consume the CLI's `AuditResult` envelope, not a bare report. Completed results c
 
 Require supported status/code/severity combinations, correctly shaped references and coverage, bounded strings and lists, positive integer locations, and finite nonnegative integer counts. Completed summary counts must agree with the issues. Reject unknown fields for schema 1 instead of retaining extra values or content. Validate failure results separately and do not treat them as successful reports. These are import checks, not another implementation of the variable comparison rules.
 
-Initial viewer limits, to enforce and test when validation is implemented:
+Enforced viewer limits:
 
 - 10 MiB per imported JSON file, checked before reading.
 - 20,000 issues and 100,000 reference and location objects in total across all report lists. Each reference and its nested location count as two objects; repeated occurrences count separately, before any deduplication.
@@ -124,7 +124,7 @@ The current interface imports and validates local results and displays the full 
 
 Install the repository dependencies with `pnpm install --frozen-lockfile`, then run `pnpm viewer:dev` from the repository root. Open the loopback URL printed by Vite. Choose a local CLI JSON result to display its summary and coverage. The viewer does not scan projects or environment files.
 
-Run `pnpm viewer:typecheck` to check browser code and the Vite configuration separately. Run `pnpm viewer:build` to check types and generate `viewer/dist/`. The existing CLI commands and its root `dist/` output remain separate.
+Run `pnpm viewer:typecheck` to check browser code, Vite configuration and browser-test code/configuration. Run `pnpm viewer:build` to check types and generate `viewer/dist/`. The existing CLI commands and its root `dist/` output remain separate.
 
 React, React DOM and Vite are development dependencies of this repository: Vite bundles the browser runtime into the viewer build. They are not runtime dependencies of the distributed CLI. The CLI package allowlist excludes the viewer source and build output.
 
@@ -166,7 +166,7 @@ Import errors have distinct headings for malformed JSON, invalid report structur
 
 A completed report with zero findings shows zero totals, an explicit scope caveat and coverage limitations, without empty exploration controls. A filtered report with zero matches keeps the complete summary and coverage, explains how to change the search or reset filters, and omits an empty findings list and pagination. Clearing returns to initial instructions. No state promises full configuration, runtime or deployment validation.
 
-The native test suite covers error/retry transitions and cancellation with delayed reads. Browser checks cover initial, completed, empty, no-match, invalid JSON/structure, unsupported schema, all four CLI failure results and recovery with synthetic reports. Loading and local read-failure transitions are checked deterministically in the import tests; no artificial delay is added to the product.
+The native test suite covers error/retry transitions and cancellation with delayed reads. Browser checks cover initial, completed, empty, no-match, invalid JSON/structure, unsupported schema, all four CLI failure results and recovery with synthetic reports. Loading and local read-failure transitions are checked deterministically in native import tests and in isolated browser tests; no artificial delay is added to the product.
 
 ## Keyboard, contrast and narrow screens
 
@@ -176,4 +176,22 @@ Buttons, search, filter triggers, options and location summaries have a minimum 
 
 Manual browser checks covered a keyboard-triggered file chooser, filtering, typed search, reset, location expansion, both pagination controls, clearing and error recovery. Reflow checks at 280, 320, 375, 768 and 1280 CSS pixels found no horizontal overflow with synthetic names of 1,024 characters. Expanded paths of 4,096 characters also remained within the 320px viewport. A 320 × 320 viewport kept the active menu option visible. Temporary viewport settings were reset after testing.
 
-Calculated contrasts include secondary text at 8.18:1 or above, error/warning text at 9.47:1 or above, active controls at 11.96:1 and input/control boundaries at 3.65:1 or above. Reference targets are the WAI explanations for [text contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) and [non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html). Visible focus was checked with keyboard input. These are scoped implementation checks, not a WCAG certification; real screen readers, physical mobile devices, OS text settings and cross-browser combinations still require independent testing. Automated browser regression coverage is still pending.
+Calculated contrasts include secondary text at 8.18:1 or above, error/warning text at 9.47:1 or above, active controls at 11.96:1 and input/control boundaries at 3.65:1 or above. Reference targets are the WAI explanations for [text contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) and [non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html). Visible focus was checked with keyboard input. These are scoped implementation checks, not a WCAG certification; real screen readers, physical mobile devices, OS text settings and cross-browser combinations still require independent testing. The browser suite below covers these keyboard, focus and reflow regressions in Chromium.
+
+## Automated browser workflows
+
+The browser suite uses Playwright Test as a development dependency. Install the matching headless Chromium once (and again after a Playwright browser-version update), then run:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium --only-shell
+pnpm viewer:test
+```
+
+`viewer:test` checks types, builds the viewer and launches its production preview on `127.0.0.1:4174`. It refuses to reuse an existing server, runs tests in isolated Chromium contexts with two workers and no retries, and shuts down its preview afterwards. The normal development server on port 5173 is independent. `pnpm test` continues to run the native core/import/filter suite; `pnpm test:package` checks the separate CLI archive and installed executable.
+
+The 21 browser cases cover CLI-core-generated synthetic reports, all five findings, summary/coverage, empty results, combined filters, path/name search, reset, canceled and repeated selection, finding/location pagination and focus, dropdown keyboard/pointer interaction, all four operational failures, malformed/invalid/unsupported/over-limit reports, pre-read rejection above 10 MiB, read errors, canceling pending reads, newest-selection-wins races, safe labels and responsive bounds. Faults and deferred reads are injected into each isolated test page's File API; no test hook or delay is shipped in the viewer. Fixtures contain invented names and paths and do not inspect user projects or environment files.
+
+The privacy case observes requests, methods, payloads, headers, WebSockets, console messages and browser errors across import, search, invalid input, clear and reload. It rejects external requests and checks that report/name canaries never appear in network or console output. Storage instrumentation plus local/session storage, cookies, IndexedDB, Cache Storage, history state and window-name checks detect unwanted persistence in the exercised flow. Reload must return to the initial screen. These checks cover the tested flows, not every possible data channel or future change.
+
+Test output and failure screenshots are written under `viewer/test-results/` and ignored by Git. Traces are off; no report fixtures are submitted to an external service. Browser dependencies, test code and results stay outside both the CLI archive and the browser runtime bundle. The initial automated target is headless Chromium; screen readers, physical devices and additional browser engines remain independent checks. CI integration is not changed by this test setup.

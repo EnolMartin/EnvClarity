@@ -27,13 +27,15 @@
     "test:package": "node --test test/packaging/*.test.ts",
     "viewer:dev": "vite viewer --config viewer/vite.config.ts",
     "viewer:build": "pnpm viewer:typecheck && vite build viewer --config viewer/vite.config.ts",
-    "viewer:typecheck": "tsc -p viewer/tsconfig.json && tsc -p viewer/tsconfig.node.json"
+    "viewer:typecheck": "tsc -p viewer/tsconfig.json && tsc -p viewer/tsconfig.node.json && tsc -p viewer/tsconfig.test.json",
+    "viewer:test": "pnpm viewer:build && playwright test --config viewer/playwright.config.ts"
   },
   "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": "^24.17.0 || ^26.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
