@@ -50,3 +50,10 @@ jobs:
 
       - name: Verify local package
         run: pnpm test:package
+
+      - name: Install Chromium for viewer tests
+        run: pnpm exec playwright install chromium --only-shell
+
+      # viewer:test checks types and builds before launching the browser suite.
+      - name: Check types, build and test viewer
+        run: pnpm viewer:test

@@ -8,9 +8,10 @@ export default defineConfig({
   outputDir: "./test-results",
   fullyParallel: true,
   forbidOnly: true,
-  workers: 2,
+  workers: process.env.CI ? 1 : 2,
   retries: 0,
   timeout: 20_000,
+  globalTimeout: 120_000,
   expect: { timeout: 5_000 },
   reporter: "list",
   use: {
