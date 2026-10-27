@@ -23,7 +23,7 @@ export function FilterSelect<Value extends string>({ label, value, options, onCh
   useEffect(() => {
     if (!open) return;
     function outside(event: PointerEvent) {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
+      if (event.target instanceof Node && !root.current?.contains(event.target)) { search.current.text = ""; setOpen(false); }
     }
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
@@ -32,12 +32,13 @@ export function FilterSelect<Value extends string>({ label, value, options, onCh
   function choose(index: number) {
     const option = options[index];
     if (option !== undefined) onChange(option.value);
+    search.current.text = "";
     setOpen(false);
   }
 
   return (
     <div className="filter-select" ref={root} onBlur={event => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      if (!event.currentTarget.contains(event.relatedTarget)) { search.current.text = ""; setOpen(false); }
     }}>
       <span id={`${id}-label`}>{label}</span>
       <button
@@ -53,11 +54,11 @@ export function FilterSelect<Value extends string>({ label, value, options, onCh
         onKeyDown={event => {
           const key = event.key;
           if (key === "Tab") { if (open) choose(active); return; }
-          if (key === "Escape") { event.preventDefault(); setOpen(false); return; }
+          if (key === "Escape") { event.preventDefault(); search.current.text = ""; setOpen(false); return; }
           if (key === "Enter" || key === " ") {
             event.preventDefault();
             if (open) choose(active);
-            else { setActive(selected); setOpen(true); }
+            else { search.current.text = ""; setActive(selected); setOpen(true); }
             return;
           }
           if (["ArrowDown", "ArrowUp", "Home", "End"].includes(key)) {

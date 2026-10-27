@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Pagination } from "./Pagination";
 import { FilterSelect } from "./FilterSelect";
 import type { AuditIssue, AuditReport, IssueCode } from "../../../src/core/types.js";
 import { displayLabel, EMPTY_FILTERS, filterIssues, FINDINGS_PAGE_SIZE } from "../report/filter";
@@ -37,11 +38,8 @@ function Finding({ issue }: { readonly issue: AuditIssue }) {
                   <li key={index}><bdi>{displayLabel(reference.location.path)}</bdi> : {reference.location.line} : {reference.location.column}<span className="location-origin">{reference.origin}</span></li>
                 ))}
               </ul>
-              {pages > 1 && <nav className="pagination" aria-label={`${description.title} locations`}>
-                <button type="button" className="secondary-button" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous locations</button>
-                <span>Page {page + 1} of {pages}</span>
-                <button type="button" className="secondary-button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next locations</button>
-              </nav>}
+              {pages > 1 && <Pagination page={page} pages={pages} label={`${description.title} locations`}
+                onChange={setPage} previousLabel="Previous locations" nextLabel="Next locations" />}
             </>
           )}
         </details>
@@ -79,11 +77,7 @@ export function Findings({ report }: { readonly report: AuditReport }) {
       {matches.length > 0 && <ol className="finding-list" start={page * FINDINGS_PAGE_SIZE + 1}>
         {matches.slice(page * FINDINGS_PAGE_SIZE, (page + 1) * FINDINGS_PAGE_SIZE).map(({ issue, index }) => <li key={index}><Finding issue={issue} /></li>)}
       </ol>}
-      {matches.length > 0 && <nav className="pagination" aria-label="Findings pages">
-        <button type="button" className="secondary-button" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
-        <span>Page {page + 1} of {pages}</span>
-        <button type="button" className="secondary-button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</button>
-      </nav>}
+      {matches.length > 0 && <Pagination page={page} pages={pages} label="Findings pages" onChange={setPage} />}
     </section>
   );
 }

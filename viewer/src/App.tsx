@@ -41,6 +41,7 @@ export function App() {
   const [reportKey, setReportKey] = useState(0);
   const [importer] = useState(() => createReportImporter(setState));
   const picker = useRef<HTMLInputElement>(null);
+  const chooseButton = useRef<HTMLButtonElement>(null);
   useEffect(() => () => importer.cancel(), [importer]);
 
   const result = state.status === "loaded" ? state.result : undefined;
@@ -49,7 +50,7 @@ export function App() {
   return (
     <div className="viewer">
       <header className="viewer-header">
-        <span className="brand">EnvClarity</span>
+        <span className="brand"><span className="brand-mark" aria-hidden="true">&gt;_</span>EnvClarity</span>
         <span className="viewer-label">Local report viewer</span>
       </header>
       <main>
@@ -72,15 +73,15 @@ export function App() {
               }
             }}
           />
-          <button type="button" className="primary-button" onClick={() => picker.current?.click()}>
+          <button ref={chooseButton} type="button" className="primary-button" onClick={() => picker.current?.click()}>
             {state.status === "idle" ? "Choose JSON report" : "Choose another report"}
           </button>
           {state.status !== "idle" && (
-            <button type="button" className="secondary-button" onClick={() => importer.clear()}>{state.status === "loading" ? "Cancel import" : "Clear report"}</button>
+            <button type="button" className="secondary-button" onClick={() => { importer.clear(); chooseButton.current?.focus(); }}>{state.status === "loading" ? "Cancel import" : "Clear report"}</button>
           )}
         </div>
         <p className="privacy-note">Up to 10 MiB. Your report stays in this browser tab and is not uploaded or saved.</p>
-        <p role="status" className="reading-status">
+        <p role="status" aria-atomic="true" className="reading-status">
           {state.status === "loading" ? "Reading and validating report…" : ""}
           {state.status === "loaded" ? (report ? `Report loaded. ${report.issues.length} ${report.issues.length === 1 ? "finding" : "findings"} within the analysis scope.` : "Audit failure result loaded.") : ""}
         </p>
