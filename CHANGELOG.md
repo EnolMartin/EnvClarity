@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `envclarity viewer` to serve the bundled report viewer on a free loopback port, without a hosted website or Vite at runtime.
+- Include production viewer assets, IBM Plex Mono fonts and their license in the local package. Reports remain in browser memory and are not uploaded.
+
 ## 0.1.0 — local CLI delivery preparation
 
 The version remains private. These notes describe the implemented CLI; they do not announce a published release. Independent user validation is pending.

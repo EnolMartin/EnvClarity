@@ -163,8 +163,8 @@ export function validateReportJson(json: string): ReportValidationResult {
     const errorCount = integer(summary.errorCount, 0);
     const warningCount = integer(summary.warningCount, 0);
     const issues = list(report.issues, REPORT_LIMITS.issues).map(issue);
-    if (issues.filter(item => item.severity === "error").length !== errorCount ||
-        issues.filter(item => item.severity === "warning").length !== warningCount) {
+    const actualErrors = issues.filter(item => item.severity === "error").length;
+    if (actualErrors !== errorCount || issues.length - actualErrors !== warningCount) {
       throw new InvalidReport();
     }
     const items = references(report.references);

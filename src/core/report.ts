@@ -25,7 +25,6 @@ function copyLocation(location: SourceLocation): SourceLocation {
   return { path: location.path, line: location.line, column: location.column };
 }
 
-/** Project only contract fields; never retain source contents or extra runtime properties. */
 function copyDynamicReference(reference: DynamicReference): DynamicReference {
   return { origin: reference.origin, location: copyLocation(reference.location) };
 }
@@ -69,14 +68,8 @@ function compareIssues(left: AuditIssue, right: AuditIssue): number {
   return compareText(left.code, right.code) || compareText(JSON.stringify(left), JSON.stringify(right));
 }
 
-/**
- * Build a detached, serializable report from analysis and comparison results.
- * References sort by path, numeric line/column, origin, then name. Issues sort by
- * their first normalized location (unlocated issues last), code, then canonical
- * JSON in UTF-16 order. Exact duplicates are removed after normalization; issues
- * with different reference sets remain distinct. No paths or names are normalized.
- * Coverage describes syntax limits, not successful traversal or operational failures.
- */
+// Normalize before sorting so equivalent inputs produce identical reports.
+// Copy only known fields: callers may carry source contents or values on extra properties.
 export function buildReport(analysis: AnalysisResult, issues: readonly AuditIssue[]): AuditReport {
   const sortedIssues = [
     ...issues.map(normalizeIssue),
@@ -89,12 +82,11 @@ export function buildReport(analysis: AnalysisResult, issues: readonly AuditIssu
   const finalIssues = sortedIssues.filter((issue, index) =>
     index === 0 || compareIssues(sortedIssues[index - 1]!, issue) !== 0);
 
+  const errorCount = finalIssues.filter(issue => issue.severity === "error").length;
+
   return {
     schemaVersion: 1,
-    summary: {
-      errorCount: finalIssues.filter(issue => issue.severity === "error").length,
-      warningCount: finalIssues.filter(issue => issue.severity === "warning").length,
-    },
+    summary: { errorCount, warningCount: finalIssues.length - errorCount },
     issues: finalIssues,
     references: normalizeReferences(analysis.references),
     coverage: {

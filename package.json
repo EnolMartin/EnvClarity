@@ -17,11 +17,15 @@
     "dist/io/discover.js",
     "dist/io/read-env.js",
     "dist/reporters/text.js",
-    "dist/reporters/json.js"
+    "dist/reporters/json.js",
+    "dist/viewer-server.js",
+    "viewer/dist/index.html",
+    "viewer/dist/assets",
+    "viewer/dist/fonts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepack": "pnpm build",
+    "prepack": "pnpm build && pnpm viewer:build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "pnpm build && node --test test/*.test.ts",
     "test:package": "node --test test/packaging/*.test.ts",

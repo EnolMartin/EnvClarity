@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
@@ -15,7 +15,7 @@ const packedFiles = [
   "dist/audit.js", "dist/cli-args.js", "dist/cli.js",
   "dist/core/analyze.js", "dist/core/compare.js", "dist/core/report.js",
   "dist/io/discover.js", "dist/io/read-env.js",
-  "dist/reporters/json.js", "dist/reporters/text.js", "package.json",
+  "dist/reporters/json.js", "dist/reporters/text.js", "dist/viewer-server.js", "package.json",
 ];
 const canary = "ENVCLARITY_PACKAGE_SYNTHETIC_VALUE";
 
@@ -26,25 +26,38 @@ function command(executable: string, args: string[], cwd: string) {
   return result.stdout;
 }
 
-test("local package contains only runtime files and README and works as an isolated production installation", async (t) => {
+test("local package includes the CLI and bundled viewer and works as an isolated production installation", async (t) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "envclarity-package-")));
   t.after(() => rm(root, { recursive: true, force: true }));
   const archive = join(root, "envclarity.tgz");
   command("pnpm", ["pack", "--out", archive], repository);
 
+  const viewerFiles = [
+    "viewer/dist/index.html",
+    ...(await readdir(join(repository, "viewer/dist/assets"))).map(name => `viewer/dist/assets/${name}`),
+    ...(await readdir(join(repository, "viewer/dist/fonts/ibm-plex-mono"))).map(name => `viewer/dist/fonts/ibm-plex-mono/${name}`),
+  ];
+  assert.ok(viewerFiles.every(name => /^viewer\/dist\/(?:index\.html|assets\/index-[\w-]+\.(?:js|css)|assets\/THIRD-PARTY-LICENSES\.txt|fonts\/ibm-plex-mono\/(?:IBMPlexMono-(?:Regular|SemiBold)\.woff2|LICENSE\.txt))$/.test(name)));
+  assert.ok(viewerFiles.includes("viewer/dist/assets/THIRD-PARTY-LICENSES.txt"));
+  assert.equal(viewerFiles.length, 7);
+  assert.equal(viewerFiles.filter(name => name.endsWith(".js")).length, 1);
+  assert.equal(viewerFiles.filter(name => name.endsWith(".css")).length, 1);
+  assert.equal(viewerFiles.filter(name => name.endsWith(".woff2")).length, 2);
+  assert.ok(viewerFiles.includes("viewer/dist/fonts/ibm-plex-mono/LICENSE.txt"));
+  const expectedFiles = [...packedFiles, ...viewerFiles].sort();
   const entries = command("tar", ["-tzf", archive], root).trim().split("\n").sort();
-  assert.deepEqual(entries, packedFiles.map(path => `package/${path}`));
+  assert.deepEqual(entries, expectedFiles.map(path => `package/${path}`));
   command("tar", ["-xzf", archive], root);
   const manifest = JSON.parse(await readFile(join(root, "package/package.json"), "utf8"));
   assert.equal(manifest.private, true);
   assert.deepEqual(manifest.bin, { envclarity: "dist/cli.js" });
-  assert.deepEqual([...manifest.files].sort(), packedFiles.filter(path => path !== "package.json" && path !== "README.md"));
+  assert.deepEqual([...manifest.files].sort(), [...packedFiles.filter(path => path !== "package.json" && path !== "README.md"), "viewer/dist/index.html", "viewer/dist/assets", "viewer/dist/fonts"].sort());
   assert.deepEqual(Object.keys(manifest.dependencies), ["typescript"]);
   assert.equal(typeof manifest.dependencies.typescript, "string");
   const packedCli = join(root, "package/dist/cli.js");
   assert.ok((await readFile(packedCli, "utf8")).startsWith("#!/usr/bin/env node\n"));
   assert.equal((await stat(packedCli)).mode & 0o777, 0o755);
-  t.diagnostic(`Packed files: ${packedFiles.join(", ")}`);
+  t.diagnostic(`Packed files: ${expectedFiles.join(", ")}`);
   t.diagnostic(`Archive SHA-256: ${createHash("sha256").update(await readFile(archive)).digest("hex")}`);
 
   const consumer = join(root, "consumer");
@@ -115,5 +128,52 @@ test("local package contains only runtime files and README and works as an isola
     }
   }
   assert.equal(run(["--unknown", canary], 2, "Invalid arguments. Use --help for usage.\n"), "");
+  const viewer = spawn(executable, ["viewer"], {
+    cwd: consumer, env: { ...process.env, NODE_OPTIONS: "", NODE_PATH: "" }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => { viewer.kill("SIGKILL"); });
+  let viewerErrors = "";
+  viewer.stderr.setEncoding("utf8").on("data", chunk => { viewerErrors += chunk; });
+  const url = await new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => { viewer.kill("SIGKILL"); reject(new Error("Viewer startup timed out")); }, 10_000);
+    let output = "";
+    viewer.stdout.setEncoding("utf8").on("data", chunk => {
+      output += chunk;
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\//);
+      if (match) { clearTimeout(timer); resolve(match[0]); }
+    });
+    viewer.once("error", error => { clearTimeout(timer); reject(error); });
+    viewer.once("exit", () => { clearTimeout(timer); reject(new Error("Viewer exited before startup")); });
+  });
+  const home = await fetch(url);
+  assert.equal(home.status, 200);
+  const html = await home.text();
+  assert.match(html, /EnvClarity/);
+  const assetPaths = [...html.matchAll(/(?:src|href)="([^" ]+\.(?:js|css))"/g)].map(match => match[1]!);
+  assert.equal(assetPaths.length, 2);
+  for (const path of assetPaths) {
+    const asset = await fetch(new URL(path, url));
+    assert.equal(asset.status, 200);
+    assert.ok((await asset.text()).length > 0);
+  }
+  for (const name of viewerFiles.filter(name => name.includes("/fonts/"))) {
+    const asset = await fetch(new URL(name.replace("viewer/dist/", ""), url));
+    assert.equal(asset.status, 200);
+    assert.ok((await asset.arrayBuffer()).byteLength > 0);
+  }
+  const notices = await fetch(new URL("assets/THIRD-PARTY-LICENSES.txt", url));
+  assert.equal(notices.status, 200);
+  const licenseText = await notices.text();
+  assert.ok(licenseText.includes(await readFile(join(repository, "node_modules/react/LICENSE"), "utf8")));
+  assert.match(licenseText, /VoidZero Inc\. and Vite contributors/);
+  const exit = new Promise<number | null>(resolve => viewer.once("exit", resolve));
+  viewer.kill("SIGTERM");
+  const stopped = await Promise.race([exit, new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => reject(new Error("Viewer shutdown timed out")), 5_000);
+    timer.unref();
+  })]);
+  assert.equal(stopped, 0);
+  assert.equal(viewerErrors, "");
+  t.diagnostic("Installed viewer serves its JS, CSS, fonts and license without Vite; SIGTERM exits cleanly.");
   t.diagnostic(`Installed executable verified with ${process.version}; exit codes 0/1/2 in text/JSON.`);
 });

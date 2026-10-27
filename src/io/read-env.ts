@@ -55,11 +55,7 @@ function readStates(content: string): EnvironmentVariable[] {
     .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
 }
 
-/**
- * Read only the two selected files, sequentially on the caller's analysis session.
- * The supported dotenv syntax is documented in PROYECTO.md and independent of Node's parser.
- * Raw contents never leave this I/O boundary; only names and states are retained.
- */
+// Parse through the shared session so format errors also stop the audit.
 export async function readEnv(
   files: ProjectFiles,
   environmentPath: string,

@@ -10,6 +10,7 @@ Local environment variable auditor for TypeScript, Node and Vite projects.
 Audits direct references without executing or modifying the project or printing values.
 
 Usage: envclarity [--help | -h]
+       envclarity viewer
        envclarity check <root> --env <file> [--example <file>] [--format text|json]
 
 Options:
@@ -17,6 +18,8 @@ Options:
   --example <file>  Example file (default: .env.example).
   --format <name>   Output format: text or json (default: text).
   -h, --help        Show this help message (used alone).
+
+viewer starts a local report viewer. Open the printed URL; stop with Ctrl+C.
 
 Selected files must be inside <root>; relative file paths are resolved from <root>.
 
@@ -41,6 +44,25 @@ if (args.command === "help") {
 } else if (args.command === "invalid") {
   process.stderr.write("Invalid arguments. Use --help for usage.\n");
   process.exitCode = 2;
+} else if (args.command === "viewer") {
+  try {
+    const { startViewer } = await import("./viewer-server.ts");
+    const server = await startViewer();
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("Viewer unavailable");
+    process.stdout.write(`Open http://127.0.0.1:${address.port}/ in your browser.\nStop the viewer with Ctrl+C.\n`);
+    const stop = () => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      server.close();
+      server.closeAllConnections();
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  } catch {
+    process.stderr.write("Could not start the local viewer. Reinstall the package or rebuild the viewer.\n");
+    process.exitCode = 2;
+  }
 } else {
   const result = await audit(args.root, args.environment, args.example);
   process.stdout.write(args.format === "json" ? `${formatJson(result)}\n` : formatText(result));

@@ -69,6 +69,7 @@ for (const args of [[], ["--help"], ["-h"]]) {
 }
 
 const invalidArgs = [
+  ["viewer", canary], ["viewer", "--port", "8080"], ["viewer", "--help"],
   ["unknown", canary], ["--unknown"], ["check"], ["check", "root"],
   ["check", "--env", "file"], ["check", "", "--env", "file"],
   ["check", "root", "extra", "--env", "file"],

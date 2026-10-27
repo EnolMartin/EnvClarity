@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 type CliArguments =
   | { command: "help" }
   | { command: "invalid" }
+  | { command: "viewer" }
   | { command: "check"; root: string; environment: string; example: string; format: "text" | "json" };
 
 /** Parse syntax only; the audit I/O layer owns path validation and safety budgets. */
@@ -10,6 +11,7 @@ export function parseCliArguments(args: string[]): CliArguments {
   if (args.length === 0 || (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))) {
     return { command: "help" };
   }
+  if (args.length === 1 && args[0] === "viewer") return { command: "viewer" };
   if (args[0] !== "check") return { command: "invalid" };
 
   try {
